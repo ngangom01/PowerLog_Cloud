@@ -1,7 +1,7 @@
 // PowerLog service worker.
 // IMPORTANT: Google Drive / Google sign-in requests are never touched here, so the
 // Drive CSV is always fetched live and never served from a stale cache.
-const CACHE = 'powerlog-v11';
+const CACHE = 'powerlog-v12';
 const SHELL = ['./', './index.html', './manifest.json', './assets/powerlog-bg-dark.jpg', './assets/powerlog-bg-light.jpg'];
 const STATIC_CDN = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net'];
 
@@ -44,3 +44,4 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match(req).then(r => r || caches.match('./index.html')))
   );
 });
+

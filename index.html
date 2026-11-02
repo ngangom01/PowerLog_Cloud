@@ -65,6 +65,10 @@
   }
   .nav-tab.active { background: var(--bg-raised); color: var(--text-1); }
 
+  .meter-bar { position:sticky; top:52px; z-index:40; display:flex; align-items:center; justify-content:center; gap:10px; padding:10px 14px; background:var(--bg-raised); border-bottom:1px solid var(--border); }
+  .meter-bar label { color:var(--text-2); font-size:12px; font-weight:600; }
+  .meter-select { max-width:min(70vw,360px); padding:8px 34px 8px 12px; border:1px solid var(--border); border-radius:9px; background:var(--bg-card); color:var(--text-1); font:600 14px 'Inter',system-ui,sans-serif; }
+
   /* PAGES */
   .page { display: none; padding: 14px; width: 100%; max-width: 1440px; margin: 0 auto; }
   .page.active { display: block; }
@@ -291,6 +295,7 @@
     nav { position:fixed; top:auto; bottom:0; left:0; right:0; height:calc(62px + var(--safe-bot)); padding:0 8px var(--safe-bot); justify-content:center; }
     .nav-logo { display:none; }
     .nav-tabs { width:100%; gap:4px; justify-content:space-around; }
+    .meter-bar { padding:8px 12px; }
     .nav-tab { flex:1; min-width:0; padding:10px 4px; font-size:12px; }
     .page { padding:12px; }
     .hero-stat { padding:18px 12px; }
@@ -348,6 +353,11 @@
     <button class="nav-tab" onclick="showPage('settings',this)">Settings</button>
   </div>
 </nav>
+
+<div class="meter-bar">
+  <label for="meter-select">Current home</label>
+  <select class="meter-select" id="meter-select" onchange="switchMeter(this.value)" aria-label="Choose which home’s meter to view"></select>
+</div>
 
 <!-- HOME -->
 <div id="page-home" class="page active">
@@ -452,6 +462,19 @@
 <!-- SETTINGS -->
 <div id="page-settings" class="page">
   <div class="card">
+    <div class="card-title">Your two homes</div>
+    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">PowerLog supports these two meters. Rename them to match your homes. Readings and tariffs stay separate for each home.</p>
+    <div class="setting-row" style="flex-wrap:wrap;gap:8px">
+      <label class="form-label" for="home-name-1" style="min-width:74px">Home 1</label>
+      <input class="setting-input" id="home-name-1" maxlength="40" style="flex:1;min-width:150px;text-align:left" aria-label="Name for Home 1">
+    </div>
+    <div class="setting-row" style="flex-wrap:wrap;gap:8px">
+      <label class="form-label" for="home-name-2" style="min-width:74px">Home 2</label>
+      <input class="setting-input" id="home-name-2" maxlength="40" style="flex:1;min-width:150px;text-align:left" aria-label="Name for Home 2">
+    </div>
+    <button class="entry-action" onclick="saveMeterNames()">Save home names</button>
+  </div>
+  <div class="card">
     <div class="card-title">Appearance</div>
     <div class="setting-row">
       <div><div class="setting-label">Theme</div><div class="setting-sub">Choose light or dark appearance</div></div>
@@ -464,7 +487,7 @@
   </div>
   <div class="card">
     <div class="card-title">Google Drive Sync</div>
-    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">Connect the same Google account on each device. Readings, tariffs, and currency are stored in a PowerLog.csv file in your Drive. The first device creates the file; other devices load its data.</p>
+    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">Connect the same Google account on each device. Both homes, their readings, tariffs, and currencies are stored in a PowerLog.csv file in your Drive. Update PowerLog on every device before syncing so older versions do not mix the homes together.</p>
     <label class="form-label" for="google-client-id">Google OAuth Client ID</label>
     <input class="form-input small" style="width:100%;margin-bottom:9px" type="text" id="google-client-id" placeholder="123456789.apps.googleusercontent.com" autocomplete="off">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -476,8 +499,8 @@
     <p class="setting-sub" style="line-height:1.5;margin-top:8px">Set up a Google OAuth Web client and enable the Google Drive API. Add this app’s HTTPS address or localhost as an authorized JavaScript origin. Only the OAuth Client ID belongs here; never add a client secret.</p>
   </div>
   <div class="card">
-    <div class="card-title">Electricity Tariffs</div>
-    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">Set when each unit rate and standing charge applies. End date is optional.</p>
+    <div class="card-title"><span id="tariff-home-name">Electricity</span> Tariffs</div>
+    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">Each home has its own rates and currency. Home 2 starts with a zero-rate tariff; add its actual electricity rate for meaningful cost totals. End date is optional.</p>
     <div id="tariff-list"></div>
     <div class="setting-row" style="flex-wrap:wrap;gap:8px">
       <input class="setting-input" style="flex:1;min-width:140px;text-align:left" type="text" id="tariff-title" maxlength="60" placeholder="Tariff title" aria-label="Tariff title">
@@ -495,7 +518,7 @@
 
   <div class="card">
     <div class="card-title">Import reconciled readings</div>
-    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">This CSV combines the earlier ECAS history with your new meter readings from Excel. Importing replaces current readings; export a backup first if needed.</p>
+    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">This CSV combines the earlier ECAS history with your new meter readings from Excel. Importing replaces readings for the selected home only; export a backup first if needed.</p>
     <input type="file" id="readings-csv" accept=".csv,text/csv" style="display:none" onchange="handleCSVFile(this)">
     <button class="btn btn-primary" onclick="document.getElementById('readings-csv').click()">Choose reconciled CSV</button>
   </div>
@@ -507,13 +530,13 @@
       <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px" onclick="exportCSV()">Export</button>
     </div>
     <div class="setting-row">
-      <div><div class="setting-label">Total Readings</div><div class="setting-sub" id="total-count">0 entries</div></div>
+      <div><div class="setting-label">Readings in this home</div><div class="setting-sub" id="total-count">0 entries</div></div>
     </div>
   </div>
 
   <div class="card">
     <div class="card-title">Danger Zone</div>
-    <button class="btn btn-danger" onclick="clearData()">Clear All Readings</button>
+    <button class="btn btn-danger" onclick="clearData()">Clear This Home’s Readings</button>
   </div>
 </div>
 
@@ -526,15 +549,46 @@
 const ECAS_IMPORT = {"readings":[{"id":4000,"ts":"2022-11-29T12:26:00","reading":72611.0,"notes":"Apartment Handover"},{"id":5000,"ts":"2022-12-09T12:26:00","reading":72641.0,"notes":""},{"id":6000,"ts":"2023-01-01T12:27:00","reading":72751.0,"notes":"New year"},{"id":7000,"ts":"2023-03-02T16:38:00","reading":73012.0,"notes":""},{"id":8000,"ts":"2023-05-15T17:22:00","reading":73237.0,"notes":"15May"},{"id":9000,"ts":"2023-06-10T11:02:00","reading":73340.0,"notes":""},{"id":10000,"ts":"2023-07-18T17:06:00","reading":73515.0,"notes":""},{"id":11000,"ts":"2023-08-03T17:20:00","reading":73582.0,"notes":""},{"id":12000,"ts":"2023-08-15T18:33:00","reading":73631.0,"notes":""},{"id":13000,"ts":"2023-08-29T17:14:00","reading":73699.0,"notes":""},{"id":14000,"ts":"2023-09-23T15:13:00","reading":73799.0,"notes":""},{"id":15000,"ts":"2023-10-01T10:38:00","reading":73830.0,"notes":""},{"id":16000,"ts":"2023-11-01T16:55:00","reading":73958.0,"notes":""},{"id":17000,"ts":"2024-01-09T16:25:00","reading":74158.0,"notes":""},{"id":18000,"ts":"2024-02-03T17:00:00","reading":74280.0,"notes":""},{"id":19000,"ts":"2024-02-22T18:17:00","reading":74365.0,"notes":""},{"id":20000,"ts":"2024-03-11T17:33:00","reading":74450.0,"notes":""},{"id":21000,"ts":"2024-03-21T15:51:00","reading":74492.0,"notes":""},{"id":22000,"ts":"2024-04-01T11:17:00","reading":74542.0,"notes":""},{"id":23000,"ts":"2024-05-10T17:50:00","reading":74714.0,"notes":""},{"id":24000,"ts":"2024-05-25T11:18:00","reading":74782.0,"notes":""},{"id":25000,"ts":"2024-06-15T17:43:00","reading":74881.0,"notes":""},{"id":26000,"ts":"2024-07-31T13:49:00","reading":75084.0,"notes":""},{"id":27000,"ts":"2024-08-09T18:07:00","reading":75129.0,"notes":""},{"id":28000,"ts":"2024-08-13T09:45:00","reading":75145.0,"notes":""},{"id":29000,"ts":"2024-09-17T18:11:00","reading":75321.0,"notes":""},{"id":30000,"ts":"2024-10-07T19:53:00","reading":75414.0,"notes":""},{"id":31000,"ts":"2024-11-12T18:18:00","reading":75582.0,"notes":""},{"id":32000,"ts":"2024-11-23T14:57:00","reading":75630.0,"notes":""},{"id":33000,"ts":"2025-01-13T11:20:00","reading":75756.0,"notes":""},{"id":34000,"ts":"2025-03-30T20:56:00","reading":76179.0,"notes":""},{"id":35000,"ts":"2025-06-07T13:15:00","reading":76497.0,"notes":""},{"id":36000,"ts":"2025-07-05T16:45:00","reading":76621.0,"notes":""},{"id":37000,"ts":"2025-08-02T10:07:00","reading":76744.0,"notes":""},{"id":38000,"ts":"2025-08-28T10:04:00","reading":76849.0,"notes":""},{"id":39000,"ts":"2025-11-07T17:08:00","reading":77219.0,"notes":""},{"id":40000,"ts":"2025-11-09T13:17:00","reading":77229.0,"notes":""},{"id":41000,"ts":"2025-12-07T13:17:00","reading":77399.0,"notes":""},{"id":42000,"ts":"2025-12-13T13:17:00","reading":77442.0,"notes":""},{"id":43000,"ts":"2025-12-14T13:18:00","reading":77447.0,"notes":""},{"id":44000,"ts":"2025-12-16T13:18:00","reading":77462.0,"notes":""},{"id":45000,"ts":"2025-12-23T13:18:00","reading":77508.0,"notes":""},{"id":46000,"ts":"2025-12-30T13:19:00","reading":77556.0,"notes":""},{"id":47000,"ts":"2026-01-01T13:19:00","reading":77567.0,"notes":""},{"id":48000,"ts":"2026-01-24T16:21:00","reading":77724.0,"notes":""},{"id":49000,"ts":"2026-05-09T18:13:00","reading":1007.0,"notes":""},{"id":50000,"ts":"2026-06-30T18:53:00","reading":1275.0,"notes":""}],"settings":{"rate":0.3768,"standing":3.332,"currency":"€"}};
 
 // ── STATE ──────────────────────────────────────────────────────────────
-let readings = JSON.parse(localStorage.getItem('pl_readings') || '[]');
-let deletedReadingIds = JSON.parse(localStorage.getItem('pl_deleted_readings') || '[]').map(String);
-let settings = JSON.parse(localStorage.getItem('pl_settings') || '{}');
-settings = { rate: 0.28, standing: 0.45, currency: '$', ...settings };
-let tariffs = JSON.parse(localStorage.getItem('pl_tariffs') || 'null');
-if (!Array.isArray(tariffs) || !tariffs.length) {
-  tariffs = [{ id: Date.now(), rate: Number(settings.rate)||0, standing: Number(settings.standing)||0, start: '0001-01-01', end: '' }];
-  localStorage.setItem('pl_tariffs', JSON.stringify(tariffs));
+const METER_IDS=['home1','home2'];
+const legacyReadings=JSON.parse(localStorage.getItem('pl_readings')||'[]');
+const legacyDeleted=JSON.parse(localStorage.getItem('pl_deleted_readings')||'[]').map(String);
+const legacySettings=JSON.parse(localStorage.getItem('pl_settings')||'{}');
+const legacyTariffs=JSON.parse(localStorage.getItem('pl_tariffs')||'null');
+let meters=JSON.parse(localStorage.getItem('pl_meters')||'null');
+let meterData=JSON.parse(localStorage.getItem('pl_meter_data')||'null');
+let activeMeterId=localStorage.getItem('pl_active_meter')||'home1';
+let googleClientId=localStorage.getItem('pl_google_client_id')||legacySettings.googleClientId||'';
+if(!Array.isArray(meters)||meters.length!==2||!METER_IDS.every(id=>meters.some(m=>m.id===id))){
+  meters=[{id:'home1',name:'Home 1',u:0},{id:'home2',name:'Home 2',u:0}];
 }
+meters=METER_IDS.map((id,i)=>{const old=meters.find(m=>m.id===id)||{};return{id,name:String(old.name||'Home '+(i+1)),u:Number(old.u)||0};});
+if(!meterData||typeof meterData!=='object'){
+  const firstSettings={rate:0.28,standing:0.45,currency:'$',...legacySettings};delete firstSettings.googleClientId;
+  const firstTariffs=Array.isArray(legacyTariffs)&&legacyTariffs.length?legacyTariffs:[{id:Date.now(),rate:Number(firstSettings.rate)||0,standing:Number(firstSettings.standing)||0,start:'0001-01-01',end:''}];
+  meterData={
+    home1:{readings:legacyReadings,deletedReadingIds:legacyDeleted,settings:firstSettings,tariffs:firstTariffs},
+    home2:{readings:[],deletedReadingIds:[],settings:{rate:0,standing:0,currency:firstSettings.currency||'$'},tariffs:[{id:Date.now()+1,rate:0,standing:0,start:'0001-01-01',end:''}]}
+  };
+}
+for(const id of METER_IDS){
+  if(!meterData[id])meterData[id]={readings:[],deletedReadingIds:[],settings:{rate:0,standing:0,currency:'$'},tariffs:[{id:id+'-default',rate:0,standing:0,start:'0001-01-01',end:''}]};
+  if(!Array.isArray(meterData[id].readings))meterData[id].readings=[];
+  if(!Array.isArray(meterData[id].deletedReadingIds))meterData[id].deletedReadingIds=[];
+  if(!Array.isArray(meterData[id].tariffs)||!meterData[id].tariffs.length)meterData[id].tariffs=[{id:Date.now()+(id==='home2'?1:0),rate:0,standing:0,start:'0001-01-01',end:''}];
+  if(!meterData[id].settings||typeof meterData[id].settings!=='object')meterData[id].settings={rate:0,standing:0,currency:'$'};
+}
+if(!METER_IDS.includes(activeMeterId))activeMeterId='home1';
+let readings=[],deletedReadingIds=[],settings={},tariffs=[];
+function loadActiveMeterState(){
+  const state=meterData[activeMeterId]||{};
+  readings=state.readings;deletedReadingIds=state.deletedReadingIds.map(String);
+  settings={rate:0,standing:0,currency:'$',...(state.settings||{})};delete settings.googleClientId;
+  tariffs=state.tariffs;
+}
+function saveActiveMeterState(){
+  meterData[activeMeterId]={readings,deletedReadingIds:deletedReadingIds.map(String),settings:{...settings},tariffs};
+}
+loadActiveMeterState();
 let driveAccessToken=null, driveFileId=null, driveSaveTimer=null, driveSaveQueue=Promise.resolve(), driveLoading=false, driveDirty=false, driveEditVersion=0;
 
 let myChart  = null;
@@ -546,6 +600,26 @@ let deferredPrompt = null;
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+function renderMeterSelector(){
+  const select=document.getElementById('meter-select');if(!select)return;
+  select.innerHTML=meters.map(m=>'<option value="'+escapeEntryText(m.id)+'">'+escapeEntryText(m.name)+'</option>').join('');
+  select.value=activeMeterId;
+  document.getElementById('tariff-home-name').textContent=meters.find(m=>m.id===activeMeterId)?.name||'Current home';
+  const label=document.getElementById('home-name-1');if(label){document.getElementById('home-name-1').value=meters.find(m=>m.id==='home1').name;document.getElementById('home-name-2').value=meters.find(m=>m.id==='home2').name;}
+}
+function switchMeter(id){
+  if(!METER_IDS.includes(id)||id===activeMeterId)return;
+  if(typeof editingEntryId!=='undefined'&&editingEntryId!==null&&!confirm('Discard unsaved entry edits and switch homes?')){document.getElementById('meter-select').value=activeMeterId;return;}
+  saveActiveMeterState();activeMeterId=id;localStorage.setItem('pl_active_meter',id);loadActiveMeterState();
+  renderMeterSelector();loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderEntries();renderStats();updateCount();
+}
+function saveMeterNames(){
+  const names=METER_IDS.map((id,i)=>document.getElementById('home-name-'+(i+1)).value.trim());
+  if(names.some(name=>!name)){toast('Enter a name for both homes','#ef4444');return;}
+  if(names[0].toLocaleLowerCase()===names[1].toLocaleLowerCase()){toast('Choose two different home names','#ef4444');return;}
+  meters=meters.map((m,i)=>({...m,name:names[i],u:Date.now()}));persistData();renderMeterSelector();toast('Home names saved ✓');
+}
+
 // ── INIT ───────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
   applyTheme(localStorage.getItem('pl_theme')||'dark');
@@ -554,8 +628,9 @@ window.addEventListener('load', () => {
   const now = new Date();
   document.getElementById('input-date').value = now.toISOString().slice(0,10);
   document.getElementById('input-time').value = now.toTimeString().slice(0,5);
+  renderMeterSelector();
   loadSettings();
-  document.getElementById('google-client-id').value=settings.googleClientId||'';
+  document.getElementById('google-client-id').value=googleClientId;
   initDrive();
   renderTariffs();
   renderSummary();
@@ -609,6 +684,7 @@ function toggleTheme() {
 // ── SETTINGS ───────────────────────────────────────────────────────────
 function loadSettings() {
   document.getElementById('setting-currency').value = settings.currency;
+  renderMeterSelector();
 }
 function saveSetting(key) {
   const map = { rate:'setting-rate', standing:'setting-standing', currency:'setting-currency' };
@@ -635,12 +711,12 @@ function setDriveStatus(message,isError=false){
 function saveGoogleClientId(){
   const id=document.getElementById('google-client-id').value.trim();
   if(!id){toast('Enter a Google OAuth Client ID','#ef4444');return;}
-  settings.googleClientId=id;localStorage.setItem('pl_settings',JSON.stringify(settings));
+  googleClientId=id;localStorage.setItem('pl_google_client_id',id);
   toast('Client ID saved ✓');
 }
 function requestDriveToken(prompt){
   return new Promise((resolve,reject)=>{
-    const id=(settings.googleClientId||document.getElementById('google-client-id').value||'').trim();
+    const id=(googleClientId||document.getElementById('google-client-id').value||'').trim();
     if(!id)return reject(new Error('Enter your Google OAuth Client ID'));
     if(!window.google?.accounts?.oauth2)return reject(new Error('Google sign-in did not load. Check your connection and reload.'));
     const client=google.accounts.oauth2.initTokenClient({client_id:id,scope:DRIVE_SCOPE,
@@ -652,7 +728,7 @@ function requestDriveToken(prompt){
 async function connectGoogleDrive(){
   const id=document.getElementById('google-client-id').value.trim();
   if(!id){toast('Enter your Google OAuth Client ID','#ef4444');return;}
-  settings.googleClientId=id;localStorage.setItem('pl_settings',JSON.stringify(settings));
+  googleClientId=id;localStorage.setItem('pl_google_client_id',id);
   try{
     setDriveStatus('Waiting for Google sign-in…');
     await requestDriveToken('');
@@ -669,11 +745,16 @@ async function driveRequest(url,options={},retry=true){
 }
 function csvEscape(value){const s=String(value??'');return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 function serializeDriveCSV(){
-  const rows=[['type','id','date','time','reading_kwh','notes','unit_rate','standing_charge','effective_start','effective_end','currency','updated_at','tariff_title']];
-  [...readings].sort((a,b)=>String(a.ts).localeCompare(String(b.ts))||Number(a.id)-Number(b.id)).forEach(r=>{const [date,time='12:00']=String(r.ts||'').split('T');rows.push(['reading',r.id,date,time,r.reading,r.notes||'','','','','','',r.u||0,'']);});
-  [...deletedReadingIds].map(String).sort().forEach(id=>rows.push(['deleted',id,'','','','','','','','','','','']));
-  [...tariffs].sort((a,b)=>a.start.localeCompare(b.start)).forEach(t=>rows.push(['tariff',t.id,'','','','',t.rate,t.standing,t.start,t.end||'','',t.u||0,t.title||'']));
-  rows.push(['settings','','','','','','','','','',settings.currency||'',settings.currencyU||0,'']);
+  saveActiveMeterState();
+  const rows=[['type','id','date','time','reading_kwh','notes','unit_rate','standing_charge','effective_start','effective_end','currency','updated_at','tariff_title','meter_id','meter_name']];
+  meters.forEach(m=>rows.push(['meter',m.id,'','','','','','','','','',m.u||0,'',m.id,m.name]));
+  for(const m of meters){
+    const data=meterData[m.id]||{readings:[],deletedReadingIds:[],tariffs:[],settings:{}};
+    [...data.readings].sort((a,b)=>String(a.ts).localeCompare(String(b.ts))||Number(a.id)-Number(b.id)).forEach(r=>{const [date,time='12:00']=String(r.ts||'').split('T');rows.push(['reading',r.id,date,time,r.reading,r.notes||'','','','','','',r.u||0,'',m.id,m.name]);});
+    [...data.deletedReadingIds].map(String).sort().forEach(id=>rows.push(['deleted',id,'','','','','','','','','','','',m.id,m.name]));
+    [...data.tariffs].sort((a,b)=>a.start.localeCompare(b.start)).forEach(t=>rows.push(['tariff',t.id,'','','','',t.rate,t.standing,t.start,t.end||'','',t.u||0,t.title||'',m.id,m.name]));
+    rows.push(['settings','','','','','','','','','',data.settings.currency||'',data.settings.currencyU||0,'',m.id,m.name]);
+  }
   return rows.map(row=>row.map(csvEscape).join(',')).join('\r\n')+'\r\n';
 }
 function parseDriveCSV(csv){
@@ -682,57 +763,77 @@ function parseDriveCSV(csv){
   const col=name=>headers.indexOf(name);
   if(col('type')<0||col('reading_kwh')<0||col('unit_rate')<0)throw new Error('This is not a PowerLog data file.');
   const upd=row=>col('updated_at')>=0?(Number(row[col('updated_at')])||0):0;
-  const out={readings:[],tariffs:[],deletedIds:[],currency:'',currencyU:0};
+  const emptyState=()=>({readings:[],tariffs:[],deletedReadingIds:[],settings:{currency:'',currencyU:0}});
+  const out={data:{home1:emptyState(),home2:emptyState()},names:{}};
   rows.forEach((row,i)=>{
     const type=(row[col('type')]||'').trim();
+    const meterId=col('meter_id')>=0&&row[col('meter_id')]?row[col('meter_id')].trim():'home1';
+    if(!METER_IDS.includes(meterId))throw new Error('Unknown home on CSV row '+(i+2)+'. Update PowerLog on all devices before syncing.');
+    const data=out.data[meterId];
+    if(type==='meter'){
+      const name=(col('meter_name')>=0?row[col('meter_name')]:row[col('notes')])||'';
+      out.names[meterId]={name:name.trim(),u:upd(row)};
+    }
     if(type==='reading'){
       const date=(row[col('date')]||'').trim(),time=(row[col('time')]||'12:00').trim(),value=Number(row[col('reading_kwh')]);
       if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value))throw new Error('Invalid reading on CSV row '+(i+2)+'.');
-      out.readings.push({id:Number(row[col('id')])||Date.now()+i,ts:date+'T'+(time||'12:00'),reading:value,notes:row[col('notes')]||'',u:upd(row)});
+      data.readings.push({id:Number(row[col('id')])||Date.now()+i,ts:date+'T'+(time||'12:00'),reading:value,notes:row[col('notes')]||'',u:upd(row)});
     }else if(type==='tariff'){
       const start=(row[col('effective_start')]||'').trim(),end=(row[col('effective_end')]||'').trim();
       const rate=Number(row[col('unit_rate')]),standing=Number(row[col('standing_charge')]);
       if(!start||!Number.isFinite(rate)||!Number.isFinite(standing))throw new Error('Invalid tariff on CSV row '+(i+2)+'.');
-      out.tariffs.push({id:Number(row[col('id')])||Date.now()+i,rate,standing,start,end,title:col('tariff_title')>=0?(row[col('tariff_title')]||'').trim():'',u:upd(row)});
-    }else if(type==='deleted'){const id=String(row[col('id')]||'').trim();if(id)out.deletedIds.push(id);}
-    else if(type==='settings'){out.currency=(row[col('currency')]||'').trim();out.currencyU=upd(row);}
+      data.tariffs.push({id:Number(row[col('id')])||Date.now()+i,rate,standing,start,end,title:col('tariff_title')>=0?(row[col('tariff_title')]||'').trim():'',u:upd(row)});
+    }else if(type==='deleted'){const id=String(row[col('id')]||'').trim();if(id)data.deletedReadingIds.push(id);}
+    else if(type==='settings'){data.settings.currency=(row[col('currency')]||'').trim();data.settings.currencyU=upd(row);}
   });
-  out.deletedIds=[...new Set(out.deletedIds)];
+  for(const id of METER_IDS)out.data[id].deletedReadingIds=[...new Set(out.data[id].deletedReadingIds)];
   return out;
 }
 // Merge a remote snapshot INTO local state. Per-record newest edit wins; deletions (tombstones) win over edits.
 function mergeRemote(remote){
-  const tomb=new Set([...deletedReadingIds,...remote.deletedIds].map(String));
+  saveActiveMeterState();
   const newer=(local,rem)=>!local?rem:!rem?local:((Number(rem.u)||0)>(Number(local.u)||0)?rem:local);
-  const rm=new Map(remote.readings.map(r=>[String(r.id),r]));
-  readings.forEach(r=>rm.set(String(r.id),newer(r,rm.get(String(r.id)))));
-  const seen=new Set(),out=[];
-  [...rm.values()].filter(r=>!tomb.has(String(r.id))).sort((a,b)=>Number(a.id)-Number(b.id)).forEach(r=>{
-    const key=String(r.ts).slice(0,16)+'|'+r.reading;   // same reading imported on two devices -> keep one
-    if(seen.has(key)){tomb.add(String(r.id));return;}
-    seen.add(key);out.push(r);
-  });
-  readings=out.sort((a,b)=>new Date(a.ts)-new Date(b.ts));
-  const localIsPlaceholder=tariffs.length===1&&tariffs[0].start==='0001-01-01'&&!tariffs[0].u;
-  if(localIsPlaceholder&&remote.tariffs.length){tariffs=[...remote.tariffs];}
-  else{
-    const tm=new Map(remote.tariffs.map(t=>[String(t.id),t]));
-    tariffs.forEach(t=>tm.set(String(t.id),newer(t,tm.get(String(t.id)))));
-    const nt=[...tm.values()].filter(t=>!tomb.has('tariff:'+t.id));
-    if(nt.length)tariffs=nt;
+  for(const id of METER_IDS){
+    const local=meterData[id]||{readings:[],tariffs:[],deletedReadingIds:[],settings:{currency:'$',currencyU:0}},rem=remote.data[id]||{readings:[],tariffs:[],deletedReadingIds:[],settings:{}};
+    const tomb=new Set([...local.deletedReadingIds,...rem.deletedReadingIds].map(String));
+    const rm=new Map(rem.readings.map(r=>[String(r.id),r]));
+    local.readings.forEach(r=>rm.set(String(r.id),newer(r,rm.get(String(r.id)))));
+    const seen=new Set(),mergedReadings=[];
+    [...rm.values()].filter(r=>!tomb.has(String(r.id))).sort((a,b)=>Number(a.id)-Number(b.id)).forEach(r=>{
+      const key=String(r.ts).slice(0,16)+'|'+r.reading;
+      if(seen.has(key)){tomb.add(String(r.id));return;}
+      seen.add(key);mergedReadings.push(r);
+    });
+    const localIsPlaceholder=local.tariffs.length===1&&local.tariffs[0].start==='0001-01-01'&&!local.tariffs[0].u;
+    let mergedTariffs;
+    if(localIsPlaceholder&&rem.tariffs.length)mergedTariffs=[...rem.tariffs];
+    else{
+      const tm=new Map(rem.tariffs.map(t=>[String(t.id),t]));
+      local.tariffs.forEach(t=>tm.set(String(t.id),newer(t,tm.get(String(t.id)))));
+      mergedTariffs=[...tm.values()].filter(t=>!tomb.has('tariff:'+t.id));
+      if(!mergedTariffs.length)mergedTariffs=local.tariffs;
+    }
+    const mergedSettings={...(local.settings||{})};
+    if(rem.settings.currency&&((rem.settings.currencyU||0)>(mergedSettings.currencyU||0)||!mergedSettings.currencyU)){mergedSettings.currency=rem.settings.currency;mergedSettings.currencyU=rem.settings.currencyU||0;}
+    meterData[id]={readings:mergedReadings.sort((a,b)=>new Date(a.ts)-new Date(b.ts)),tariffs:mergedTariffs.sort((a,b)=>a.start.localeCompare(b.start)),deletedReadingIds:[...tomb],settings:mergedSettings};
+    const remoteName=remote.names[id],localMeter=meters.find(m=>m.id===id);
+    if(remoteName&&remoteName.name&&localMeter&&((remoteName.u||0)>(localMeter.u||0)||!(localMeter.u||0)))Object.assign(localMeter,{name:remoteName.name,u:remoteName.u||0});
   }
-  tariffs.sort((a,b)=>a.start.localeCompare(b.start));
-  if(remote.currency&&((remote.currencyU||0)>(settings.currencyU||0)||!settings.currencyU)){settings.currency=remote.currency;settings.currencyU=remote.currencyU||0;}
-  deletedReadingIds=[...tomb];
+  loadActiveMeterState();
 }
 function persistLocal(){
-  localStorage.setItem('pl_readings',JSON.stringify(readings));
-  localStorage.setItem('pl_deleted_readings',JSON.stringify(deletedReadingIds));
-  localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));
-  localStorage.setItem('pl_settings',JSON.stringify(settings));
+  saveActiveMeterState();
+  localStorage.setItem('pl_meter_data',JSON.stringify(meterData));
+  localStorage.setItem('pl_meters',JSON.stringify(meters));
+  localStorage.setItem('pl_active_meter',activeMeterId);
+  const home1=meterData.home1;
+  localStorage.setItem('pl_readings',JSON.stringify(home1.readings));
+  localStorage.setItem('pl_deleted_readings',JSON.stringify(home1.deletedReadingIds));
+  localStorage.setItem('pl_tariffs',JSON.stringify(home1.tariffs));
+  localStorage.setItem('pl_settings',JSON.stringify({...home1.settings,googleClientId}));
 }
 function refreshAll(){
-  loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderStats();updateCount();
+  renderMeterSelector();loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderStats();updateCount();
   if(editingEntryId===null)renderEntries();
 }
 async function uploadDriveCSV(csv){
@@ -1272,7 +1373,7 @@ async function handleCSVFile(input) {
       return {id:Date.now()+i,ts:date+'T'+(time||'12:00'),reading:value,notes:notesCol>=0?(row[notesCol]||'').trim():'',u:Date.now()};
     });
     if(!imported.length)throw new Error('No readings were found in this CSV.');
-    if(!confirm('Replace your current '+readings.length+' reading(s) with '+imported.length+' reconciled reading(s)? Export your current data first if you want a backup.'))return;
+    if(!confirm('Replace this home’s '+readings.length+' reading(s) with '+imported.length+' reconciled reading(s)? Export your current data first if you want a backup.'))return;
     deletedReadingIds=[...new Set([...deletedReadingIds,...readings.map(r=>String(r.id))])];
     readings=imported.sort((a,b)=>new Date(a.ts)-new Date(b.ts));
     persistData();
@@ -1295,7 +1396,8 @@ function exportCSV() {
   });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download = 'powerlog-readings.csv'; a.click();
+  const home=(meters.find(m=>m.id===activeMeterId)?.name||'home').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  a.download = 'powerlog-'+(home||'home')+'-readings.csv'; a.click();
 }
 
 // ── HELPERS ────────────────────────────────────────────────────────────
@@ -1309,10 +1411,12 @@ function toast(msg='Saved!', color='#10b981') {
   setTimeout(() => el.classList.remove('show'), 2400);
 }
 function updateCount() {
-  document.getElementById('total-count').textContent = readings.length + ' entries';
+  const name=meters.find(m=>m.id===activeMeterId)?.name||'home';
+  document.getElementById('total-count').textContent = readings.length + ' entries · '+name;
 }
 function clearData() {
-  if (!confirm('Delete ALL readings? Cannot be undone.')) return;
+  const name=meters.find(m=>m.id===activeMeterId)?.name||'this home';
+  if (!confirm('Delete ALL readings for '+name+'? Readings for your other home will remain. Cannot be undone.')) return;
   deletedReadingIds=[...new Set([...deletedReadingIds,...readings.map(r=>String(r.id))])];
   readings = [];
   persistData();

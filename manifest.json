@@ -1,8 +1,9 @@
 {
   "name": "PowerLog – Meter Tracker",
   "short_name": "PowerLog",
-  "description": "Track your electricity meter readings and monitor home energy consumption over time.",
+  "description": "Track electricity meter readings for two homes.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0f1219",
   "theme_color": "#1a1f2e",
@@ -21,7 +22,6 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [],
   "categories": ["utilities", "productivity"],
   "lang": "en"
 }
