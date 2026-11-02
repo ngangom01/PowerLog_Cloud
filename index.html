@@ -144,6 +144,10 @@
 
   /* CHART */
   .chart-wrap { position: relative; height: 160px; margin-top: 8px; }
+  .chart-scroll-viewport { width:100%; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:thin; scrollbar-color:var(--blue) var(--bg-raised); }
+  .chart-scroll-content { min-width:100%; }
+  .chart-scroll-range { width:100%; margin:8px 0 0; accent-color:var(--blue); }
+  .chart-scroll-caption { font-size:11px; color:var(--text-2); text-align:center; margin-top:2px; }
   .chart-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
   .chart-tab {
     flex: 1; padding: 7px; border: 1px solid var(--border);
@@ -212,6 +216,9 @@
   .history-date { font-size:13px; color:var(--text-2); text-align:right; }
   .summary-group-title { font-size:12px; color:var(--text-2); font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin:4px 2px 8px; }
   .stats-note { font-size:11px; color:var(--text-2); line-height:1.5; margin:10px 2px 0; }
+  .tariff-chart-wrap { position:relative; width:100%; min-height:170px; margin:6px 0 18px; }
+  .tariff-chart-wrap:last-child { margin-bottom:0; }
+  .tariff-chart-title { font-size:12px; color:var(--text-2); font-weight:600; margin:8px 0 2px; }
   .entry-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); }
   .entry-row:last-child { border-bottom:0; }
   .entry-details { flex:1; min-width:0; }
@@ -361,7 +368,11 @@
   </div>
   <div class="card" style="padding-bottom:20px">
     <div class="card-title" id="chart-title">Monthly Consumption</div>
-    <div class="chart-wrap"><canvas id="myChart"></canvas></div>
+    <div class="chart-scroll-viewport" id="home-chart-viewport">
+      <div class="chart-scroll-content" id="home-chart-content"><div class="chart-wrap"><canvas id="myChart"></canvas></div></div>
+    </div>
+    <input class="chart-scroll-range" id="home-chart-scroll" type="range" min="0" max="0" value="0" aria-label="Scroll through months">
+    <div class="chart-scroll-caption" id="home-chart-scroll-caption">Scroll to view other months</div>
   </div>
 </div>
 
@@ -394,6 +405,14 @@
       </table>
     </div>
     <p class="stats-note">For intervals spanning months, average kWh per day is allocated by days covered in each month. A ~ marks these estimates; gaps across meter resets are not estimated.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Totals by Tariff Period</div>
+    <p class="stats-note" style="margin:0 0 8px">Estimated consumption and total cost allocated across each tariff’s effective dates.</p>
+    <div class="tariff-chart-title">Total kWh</div>
+    <div class="tariff-chart-wrap" id="tariff-kwh-wrap"><canvas id="tariff-kwh-chart"></canvas></div>
+    <div class="tariff-chart-title">Total Cost</div>
+    <div class="tariff-chart-wrap" id="tariff-cost-wrap"><canvas id="tariff-cost-chart"></canvas></div>
   </div>
 </div>
 
@@ -437,6 +456,7 @@
     <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">Set when each unit rate and standing charge applies. End date is optional.</p>
     <div id="tariff-list"></div>
     <div class="setting-row" style="flex-wrap:wrap;gap:8px">
+      <input class="setting-input" style="flex:1;min-width:140px;text-align:left" type="text" id="tariff-title" maxlength="60" placeholder="Tariff title" aria-label="Tariff title">
       <input class="setting-input" style="flex:1;min-width:110px" type="number" id="tariff-rate" step="0.0001" min="0" placeholder="Unit rate" aria-label="Unit rate">
       <input class="setting-input" style="flex:1;min-width:110px" type="number" id="tariff-standing" step="0.0001" min="0" placeholder="Daily charge" aria-label="Standing charge">
       <input class="setting-input" style="flex:1;min-width:130px" type="date" id="tariff-start" aria-label="Effective start date">
@@ -494,6 +514,7 @@ if (!Array.isArray(tariffs) || !tariffs.length) {
 let driveAccessToken=null, driveFileId=null, driveSaveTimer=null, driveSaveQueue=Promise.resolve(), driveLoading=false, driveDirty=false, driveEditVersion=0;
 
 let myChart  = null;
+let tariffKwhChart=null, tariffCostChart=null;
 let chartMode = 'kwh';
 let statsYear = new Date().getFullYear();
 let statsMode = 'kwh';
@@ -613,11 +634,11 @@ async function driveRequest(url,options={},retry=true){
 }
 function csvEscape(value){const s=String(value??'');return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 function serializeDriveCSV(){
-  const rows=[['type','id','date','time','reading_kwh','notes','unit_rate','standing_charge','effective_start','effective_end','currency','updated_at']];
-  [...readings].sort((a,b)=>String(a.ts).localeCompare(String(b.ts))||Number(a.id)-Number(b.id)).forEach(r=>{const [date,time='12:00']=String(r.ts||'').split('T');rows.push(['reading',r.id,date,time,r.reading,r.notes||'','','','','','',r.u||0]);});
-  [...deletedReadingIds].map(String).sort().forEach(id=>rows.push(['deleted',id,'','','','','','','','','','']));
-  [...tariffs].sort((a,b)=>a.start.localeCompare(b.start)).forEach(t=>rows.push(['tariff',t.id,'','','','',t.rate,t.standing,t.start,t.end||'','',t.u||0]));
-  rows.push(['settings','','','','','','','','','',settings.currency||'',settings.currencyU||0]);
+  const rows=[['type','id','date','time','reading_kwh','notes','unit_rate','standing_charge','effective_start','effective_end','currency','updated_at','tariff_title']];
+  [...readings].sort((a,b)=>String(a.ts).localeCompare(String(b.ts))||Number(a.id)-Number(b.id)).forEach(r=>{const [date,time='12:00']=String(r.ts||'').split('T');rows.push(['reading',r.id,date,time,r.reading,r.notes||'','','','','','',r.u||0,'']);});
+  [...deletedReadingIds].map(String).sort().forEach(id=>rows.push(['deleted',id,'','','','','','','','','','','']));
+  [...tariffs].sort((a,b)=>a.start.localeCompare(b.start)).forEach(t=>rows.push(['tariff',t.id,'','','','',t.rate,t.standing,t.start,t.end||'','',t.u||0,t.title||'']));
+  rows.push(['settings','','','','','','','','','',settings.currency||'',settings.currencyU||0,'']);
   return rows.map(row=>row.map(csvEscape).join(',')).join('\r\n')+'\r\n';
 }
 function parseDriveCSV(csv){
@@ -637,7 +658,7 @@ function parseDriveCSV(csv){
       const start=(row[col('effective_start')]||'').trim(),end=(row[col('effective_end')]||'').trim();
       const rate=Number(row[col('unit_rate')]),standing=Number(row[col('standing_charge')]);
       if(!start||!Number.isFinite(rate)||!Number.isFinite(standing))throw new Error('Invalid tariff on CSV row '+(i+2)+'.');
-      out.tariffs.push({id:Number(row[col('id')])||Date.now()+i,rate,standing,start,end,u:upd(row)});
+      out.tariffs.push({id:Number(row[col('id')])||Date.now()+i,rate,standing,start,end,title:col('tariff_title')>=0?(row[col('tariff_title')]||'').trim():'',u:upd(row)});
     }else if(type==='deleted'){const id=String(row[col('id')]||'').trim();if(id)out.deletedIds.push(id);}
     else if(type==='settings'){out.currency=(row[col('currency')]||'').trim();out.currencyU=upd(row);}
   });
@@ -746,11 +767,25 @@ function initDrive(){
 function renderTariffs() {
   const el=document.getElementById('tariff-list'); if(!el)return;
   const ordered=[...tariffs].sort((a,b)=>a.start.localeCompare(b.start));
-  el.innerHTML=ordered.length?ordered.map(t=>'<div class="setting-row"><div style="flex:1"><div class="setting-label">'+escapeEntryText(t.start==='0001-01-01'?'From beginning':t.start)+(t.end?' – '+escapeEntryText(t.end):' – No end date')+'</div><div class="setting-sub">'+escapeEntryText(settings.currency)+Number(t.rate).toFixed(4)+'/kWh · '+escapeEntryText(settings.currency)+Number(t.standing).toFixed(4)+'/day</div></div><button class="entry-icon danger" aria-label="Delete tariff" title="Delete tariff" onclick="deleteTariff('+Number(t.id)+')">×</button></div>').join(''):'<div class="empty"><p>No tariffs yet. Add one below.</p></div>';
+  el.innerHTML=ordered.length?ordered.map(t=>{
+    const id=String(t.id),title=String(t.title||'');
+    return '<div class="setting-row"><div style="flex:1;min-width:0"><div class="setting-label" id="tariff-title-display-'+escapeEntryText(id)+'">'+escapeEntryText(title||'Untitled tariff')+'</div><div class="setting-sub">'+escapeEntryText(t.start==='0001-01-01'?'From beginning':t.start)+(t.end?' – '+escapeEntryText(t.end):' – No end date')+' · '+escapeEntryText(settings.currency)+Number(t.rate).toFixed(4)+'/kWh · '+escapeEntryText(settings.currency)+Number(t.standing).toFixed(4)+'/day</div><div id="tariff-title-edit-'+escapeEntryText(id)+'" hidden><input class="setting-input" style="width:100%;text-align:left;margin-top:6px" type="text" maxlength="60" value="'+escapeEntryText(title)+'" aria-label="Tariff title"><button class="entry-action" onclick="saveTariffTitle('+Number(t.id)+',this.previousElementSibling.value)">Save title</button><button class="entry-action" onclick="renderTariffs()">Cancel</button></div></div><button class="entry-icon" aria-label="Rename tariff" title="Rename tariff" onclick="beginTariffTitleEdit('+Number(t.id)+')">✎</button><button class="entry-icon danger" aria-label="Delete tariff" title="Delete tariff" onclick="deleteTariff('+Number(t.id)+')">×</button></div>';
+  }).join(''):'<div class="empty"><p>No tariffs yet. Add one below.</p></div>';
+}
+function beginTariffTitleEdit(id){
+  const key=String(id);document.getElementById('tariff-title-display-'+key).hidden=true;document.getElementById('tariff-title-edit-'+key).hidden=false;
+  document.getElementById('tariff-title-edit-'+key).querySelector('input').focus();
+}
+function saveTariffTitle(id,value){
+  const title=String(value||'').trim();if(!title){toast('Enter a tariff title','#ef4444');return;}
+  const tariff=tariffs.find(t=>String(t.id)===String(id));if(!tariff)return;
+  tariff.title=title;tariff.u=Date.now();persistData();renderTariffs();renderStats();toast('Tariff title updated ✓');
 }
 function addTariff() {
+  const title=document.getElementById('tariff-title').value.trim();
   const rate=parseFloat(document.getElementById('tariff-rate').value), standing=parseFloat(document.getElementById('tariff-standing').value);
   const start=document.getElementById('tariff-start').value, end=document.getElementById('tariff-end').value;
+  if(!title){toast('Enter a tariff title','#ef4444');return;}
   if(!Number.isFinite(rate)||rate<0||!Number.isFinite(standing)||standing<0){toast('Enter valid tariff amounts','#ef4444');return;}
   if(!start){toast('Pick an effective start date','#ef4444');return;}
   if(end&&end<start){toast('End date must be on or after start date','#ef4444');return;}
@@ -758,8 +793,8 @@ function addTariff() {
   adjusted.forEach(t=>{if(t.start<start&&(!t.end||t.end>=start)){t.end=previousDate(start);t.u=Date.now();}});
   const overlaps=adjusted.some(t=>start<=(t.end||'9999-12-31')&&(!end||end>=t.start));
   if(overlaps){toast('Tariff dates overlap an existing tariff','#ef4444');return;}
-  tariffs=adjusted; tariffs.push({id:Date.now(),rate,standing,start,end,u:Date.now()}); persistData();
-  ['tariff-rate','tariff-standing','tariff-start','tariff-end'].forEach(id=>document.getElementById(id).value='');
+  tariffs=adjusted; tariffs.push({id:Date.now(),title,rate,standing,start,end,u:Date.now()}); persistData();
+  ['tariff-title','tariff-rate','tariff-standing','tariff-start','tariff-end'].forEach(id=>document.getElementById(id).value='');
   renderTariffs(); renderSummary(); renderChart(); renderStats(); toast('Tariff added ✓');
 }
 function deleteTariff(id) {
@@ -837,6 +872,31 @@ function getMonthlyData() {
   });
 }
 
+function getTariffPeriodTotals() {
+  const totals=new Map(tariffs.map(t=>[String(t.id),{...t,kwh:0,days:0}]));
+  if(readings.length<2)return [...totals.values()].sort((a,b)=>a.start.localeCompare(b.start)).map(t=>({...t,cost:0}));
+  const sorted=[...readings].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  const boundaries=tariffs.flatMap(t=>[t.start,t.end?nextDate(t.end):'']).filter(Boolean);
+  for(let i=1;i<sorted.length;i++){
+    const prev=sorted[i-1],curr=sorted[i];
+    if(curr.reading<prev.reading)continue;
+    const start=new Date(prev.ts),end=new Date(curr.ts),elapsedDays=(end-start)/86400000;
+    if(!(elapsedDays>0))continue;
+    const dailyKwh=(curr.reading-prev.reading)/elapsedDays;
+    let cursor=start;
+    while(cursor<end){
+      const dateKey=cursor.getFullYear()+'-'+String(cursor.getMonth()+1).padStart(2,'0')+'-'+String(cursor.getDate()).padStart(2,'0');
+      const active=tariffs.find(t=>dateKey>=t.start&&(!t.end||dateKey<=t.end));
+      const boundary=boundaries.filter(d=>d>dateKey).sort()[0];
+      const days=boundary?Math.min((end-cursor)/86400000,(new Date(boundary+'T00:00:00')-cursor)/86400000):(end-cursor)/86400000;
+      if(!(days>0))break;
+      if(active){const row=totals.get(String(active.id));if(row){row.kwh+=dailyKwh*days;row.days+=days;}}
+      cursor=new Date(cursor.getTime()+days*86400000);
+    }
+  }
+  return [...totals.values()].sort((a,b)=>a.start.localeCompare(b.start)).map(t=>({...t,cost:t.kwh*t.rate+t.days*t.standing}));
+}
+
 // Build year→month map  { 2024: { 1: {kwh,cost,...}, ... }, ... }
 function getYearMap() {
   const monthly = getMonthlyData();
@@ -875,6 +935,7 @@ function renderSummary() {
   const yearKwh = yearMonthly.reduce((sum,m) => sum+m.kwh,0);
   const yearCost = yearMonthly.reduce((sum,m) => sum+m.cost,0);
   const yearEstimated = yearMonthly.some(m => m.estimated);
+  const lastYearKwh=monthly.filter(m=>m.key.startsWith(String(currentYear-1)+'-')).reduce((sum,m)=>sum+m.kwh,0);
 
   if (!last) {
     el.innerHTML = `<div class="empty"><div class="icon">⚡</div><p>Add your first meter reading below to start tracking.</p></div>`;
@@ -887,6 +948,12 @@ function renderSummary() {
     const cls = pct > 10 ? 'badge-red' : pct < -10 ? 'badge-green' : 'badge-amber';
     trendBadge = `<span class="badge ${cls}">${pct>0?'+':''}${pct}% vs last</span>`;
   }
+  let yearTrendBadge='';
+  if(lastYearKwh>0){
+    const pct=((yearKwh-lastYearKwh)/lastYearKwh*100).toFixed(0);
+    const cls=pct>10?'badge-red':pct< -10?'badge-green':'badge-amber';
+    yearTrendBadge=`<span class="badge ${cls}">${pct>0?'+':''}${pct}% vs last</span>`;
+  }
 
   el.innerHTML = `
     <div class="hero-stat card">
@@ -896,7 +963,7 @@ function renderSummary() {
     </div>
     <div class="summary-group-title">This Year · ${currentYear}</div>
     <div class="stat-grid">
-      <div class="stat-box"><div class="label">This Year Consumption</div><div class="value blue">${yearEstimated?'~':''}${yearKwh.toFixed(1)} kWh</div></div>
+      <div class="stat-box"><div class="label">This Year Consumption</div><div class="value blue">${yearEstimated?'~':''}${yearKwh.toFixed(1)} kWh</div>${yearTrendBadge}</div>
       <div class="stat-box"><div class="label">This Year Cost</div><div class="value amber">${yearEstimated?'~':''}${c}${yearCost.toFixed(2)}</div></div>
     </div>
     ${curr ? `<div class="summary-group-title">This Month</div><div class="stat-grid">
@@ -909,17 +976,21 @@ function renderSummary() {
 
 // ── CHART ──────────────────────────────────────────────────────────────
 function renderChart() {
-  const monthly = getMonthlyData();
+  const allMonthly=getMonthlyData();
+  const monthly=chartMode==='cost'?allMonthly.slice(-24):allMonthly;
   const labels  = monthly.map(m => m.label);
   const data    = chartMode === 'kwh' ? monthly.map(m => +m.kwh.toFixed(1)) : monthly.map(m => +m.cost.toFixed(2));
   const color   = chartMode === 'kwh' ? '#3b82f6' : '#f59e0b';
+  const viewport=document.getElementById('home-chart-viewport'),content=document.getElementById('home-chart-content'),range=document.getElementById('home-chart-scroll'),caption=document.getElementById('home-chart-scroll-caption');
+  const previousMax=Math.max(0,viewport.scrollWidth-viewport.clientWidth),wasAtEnd=previousMax-viewport.scrollLeft<4,previousScroll=viewport.scrollLeft;
+  content.style.width=Math.max(viewport.clientWidth||640,monthly.length*48)+'px';
   document.getElementById('chart-title').textContent = chartMode === 'kwh' ? 'Monthly Consumption' : 'Monthly Cost';
   const ctx = document.getElementById('myChart').getContext('2d');
   if (myChart) myChart.destroy();
   if (!monthly.length) {
     ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
     ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--text-3'); ctx.font='13px Inter'; ctx.textAlign='center';
-    ctx.fillText('Add 2+ readings to see chart', ctx.canvas.width/2, 80); return;
+    ctx.fillText('Add 2+ readings to see chart', ctx.canvas.width/2, 80);range.hidden=true;caption.hidden=true;return;
   }
   const css=getComputedStyle(document.documentElement), bg=css.getPropertyValue('--bg-card').trim(), border=css.getPropertyValue('--border').trim(), text=css.getPropertyValue('--text-2').trim();
   myChart = new Chart(ctx, {
@@ -936,6 +1007,10 @@ function renderChart() {
       }
     }
   });
+  range.hidden=false;caption.hidden=false;
+  range.oninput=()=>{viewport.scrollLeft=Number(range.value);};
+  viewport.onscroll=()=>{range.value=viewport.scrollLeft;};
+  requestAnimationFrame(()=>{const max=Math.max(0,viewport.scrollWidth-viewport.clientWidth);range.max=max;viewport.scrollLeft=wasAtEnd?max:Math.min(previousScroll,max);range.value=viewport.scrollLeft;range.hidden=max===0;caption.hidden=max===0;});
 }
 function switchChart(mode, btn) {
   chartMode = mode;
@@ -986,6 +1061,21 @@ function renderStats() {
   const totalPctStr=hasThis&&hasPrev?'<span class="'+tCls+'">'+tSign+tPct.toFixed(1)+'%</span>':'<span class="neutral">—</span>';
   rows+='<tr class="total-row"><td>Total</td><td>'+estThis+pfx+totalThis.toFixed(1)+unit+'</td><td>'+estPrev+pfx+totalPrev.toFixed(1)+unit+'</td><td>'+totalDiffStr+'</td><td>'+totalPctStr+'</td></tr>';
   document.getElementById('stats-tbody').innerHTML=rows;
+  renderTariffPeriodCharts();
+}
+
+function renderTariffPeriodCharts(){
+  const totals=getTariffPeriodTotals(),labels=totals.map(t=>t.title||('Tariff from '+t.start));
+  const css=getComputedStyle(document.documentElement),border=css.getPropertyValue('--border').trim(),text=css.getPropertyValue('--text-2').trim(),body=css.getPropertyValue('--text-1').trim(),bg=css.getPropertyValue('--bg-card').trim();
+  const height=Math.max(170,totals.length*42)+'px';
+  document.getElementById('tariff-kwh-wrap').style.height=height;document.getElementById('tariff-cost-wrap').style.height=height;
+  if(tariffKwhChart)tariffKwhChart.destroy();if(tariffCostChart)tariffCostChart.destroy();
+  const makeChart=(canvasId,values,color,label,format)=>new Chart(document.getElementById(canvasId).getContext('2d'),{
+    type:'bar',data:{labels,datasets:[{label,data:values,backgroundColor:color+'33',borderColor:color,borderWidth:2,borderRadius:5,hoverBackgroundColor:color+'66'}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:bg,borderColor:border,borderWidth:1,titleColor:text,bodyColor:body,callbacks:{label:ctx=>label+': '+format(ctx.parsed.x)}}},scales:{x:{beginAtZero:true,grid:{color:border},ticks:{color:text,callback:v=>format(v)}},y:{grid:{display:false},ticks:{color:text,autoSkip:false}}}}
+  });
+  tariffKwhChart=makeChart('tariff-kwh-chart',totals.map(t=>+t.kwh.toFixed(1)),'#3b82f6','Total kWh',v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:1})+' kWh');
+  tariffCostChart=makeChart('tariff-cost-chart',totals.map(t=>+t.cost.toFixed(2)),'#f59e0b','Total cost',v=>settings.currency+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
 }
 
 function changeYear(delta) {
