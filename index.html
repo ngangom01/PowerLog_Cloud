@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1f2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PowerLog">
+<title>PowerLog – Meter Tracker</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep:   #0f1219;
+    --bg-card:   #1a1f2e;
+    --bg-raised: #242a3a;
+    --border:    #2e3650;
+    --blue:      #3b82f6;
+    --blue-dim:  #1d4ed8;
+    --amber:     #f59e0b;
+    --green:     #10b981;
+    --red:       #ef4444;
+    --text-1:    #f1f5f9;
+    --text-2:    #94a3b8;
+    --text-3:    #475569;
+    --safe-top:  env(safe-area-inset-top, 0px);
+    --safe-bot:  env(safe-area-inset-bottom, 0px);
+  }
+  [data-theme="light"] {
+    --bg-deep:#f3f6fb; --bg-card:#ffffff; --bg-raised:#edf1f7; --border:#d8e0eb;
+    --text-1:#172033; --text-2:#586579; --text-3:#8995a7;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-1);
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bot);
+    overscroll-behavior: none;
+  }
+
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 52px;
+  }
+  .nav-logo { font-size: 17px; font-weight: 700; letter-spacing: -0.5px; flex-shrink: 0; }
+  .nav-logo span { color: var(--blue); }
+  .nav-tabs { display: flex; gap: 2px; }
+  .nav-tab {
+    background: none; border: none; color: var(--text-2);
+    font-size: 12px; font-weight: 500; padding: 6px 9px;
+    border-radius: 6px; cursor: pointer; transition: all .15s;
+    white-space: nowrap;
+  }
+  .nav-tab.active { background: var(--bg-raised); color: var(--text-1); }
+
+  /* PAGES */
+  .page { display: none; padding: 14px; width: 100%; max-width: 800px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* CARDS */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    color: var(--text-2); text-transform: uppercase; margin-bottom: 12px;
+  }
+
+  /* HERO STAT */
+  .hero-stat { text-align: center; padding: 20px 16px; }
+  .hero-stat .label { font-size: 12px; color: var(--text-2); font-weight: 500; margin-bottom: 6px; }
+  .hero-stat .value { font-size: 48px; font-weight: 300; letter-spacing: -2px; line-height: 1; }
+  .hero-stat .unit { font-size: 16px; font-weight: 400; color: var(--text-2); margin-left: 4px; }
+  .hero-stat .sub { font-size: 13px; color: var(--text-2); margin-top: 6px; }
+
+  /* STAT GRID */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .stat-box {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px;
+  }
+  .stat-box .label { font-size: 11px; color: var(--text-2); margin-bottom: 5px; }
+  .stat-box .value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
+  .stat-box .value.blue  { color: var(--blue); }
+  .stat-box .value.amber { color: var(--amber); }
+  .stat-box .value.green { color: var(--green); }
+
+  /* FORM */
+  .form-group { margin-bottom: 12px; }
+  .form-label { font-size: 12px; color: var(--text-2); font-weight: 500; margin-bottom: 5px; display: block; }
+  .form-input {
+    width: 100%; background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text-1); font-family: inherit;
+    font-size: 20px; font-weight: 500; padding: 11px 13px;
+    outline: none; transition: border-color .15s; -webkit-appearance: none;
+  }
+  .form-input:focus { border-color: var(--blue); }
+  .form-input.small { font-size: 15px; padding: 9px 11px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* BUTTON */
+  .btn {
+    width: 100%; padding: 13px; border: none; border-radius: 10px;
+    font-family: inherit; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: all .15s; -webkit-tap-highlight-color: transparent;
+  }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:active { background: var(--blue-dim); }
+  .btn-danger { background: transparent; border: 1px solid var(--red); color: var(--red); padding: 10px; font-size: 13px; }
+  .btn-success { background: var(--green); color: #fff; }
+
+  /* READING LIST */
+  .reading-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 0; border-bottom: 1px solid var(--border);
+  }
+  .reading-item:last-child { border-bottom: none; }
+  .reading-date { font-size: 13px; color: var(--text-2); }
+  .reading-kwh  { font-size: 15px; font-weight: 600; }
+  .reading-cost { font-size: 13px; color: var(--amber); }
+  .reading-meter{ font-size: 11px; color: var(--text-3); }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    padding: 2px 7px; border-radius: 20px; margin-left: 6px;
+  }
+  .badge-green { background: rgba(16,185,129,.15); color: var(--green); }
+  .badge-amber { background: rgba(245,158,11,.15);  color: var(--amber); }
+  .badge-red   { background: rgba(239,68,68,.15);   color: var(--red); }
+
+  /* CHART */
+  .chart-wrap { position: relative; height: 160px; margin-top: 8px; }
+  .chart-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
+  .chart-tab {
+    flex: 1; padding: 7px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-2); font-family: inherit;
+    font-size: 12px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: all .15s;
+  }
+  .chart-tab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+  /* ── STATS TABLE ─────────────────────────────────────────── */
+  .year-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .year-btn {
+    background: var(--bg-raised); border: 1px solid var(--border);
+    color: var(--text-1); font-family: inherit; font-size: 20px; font-weight: 300;
+    width: 40px; height: 40px; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .year-label { font-size: 18px; font-weight: 600; }
+
+  .stats-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .stats-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    min-width: 320px;
+  }
+  .stats-table th {
+    text-align: left; padding: 6px 8px;
+    font-size: 11px; font-weight: 600; color: var(--text-2);
+    letter-spacing: .04em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .stats-table th:not(:first-child) { text-align: right; }
+  .stats-table td {
+    padding: 9px 8px; border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .stats-table td:not(:first-child) { text-align: right; }
+  .stats-table tr:last-child td { border-bottom: none; font-weight: 600; }
+  .stats-table tr.total-row td { border-top: 1px solid var(--border); padding-top: 11px; }
+  .month-cell { font-weight: 500; }
+  .zero-cell  { color: var(--text-3); }
+  .up   { color: var(--red); }
+  .down { color: var(--green); }
+  .neutral { color: var(--text-2); }
+
+  /* SETTINGS */
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 0; border-bottom: 1px solid var(--border);
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 14px; }
+  .setting-sub { font-size: 12px; color: var(--text-2); }
+  .setting-input {
+    background: var(--bg-raised); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text-1); font-family: inherit;
+    font-size: 14px; font-weight: 600; padding: 7px 10px;
+    width: 110px; text-align: right; outline: none;
+  }
+  .setting-input:focus { border-color: var(--blue); }
+
+  .history-main { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; width:100%; }
+  .history-reading { font-size:20px; font-weight:700; letter-spacing:-.4px; white-space:nowrap; }
+  .history-date { font-size:13px; color:var(--text-2); text-align:right; }
+  .summary-group-title { font-size:12px; color:var(--text-2); font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin:4px 2px 8px; }
+  .stats-note { font-size:11px; color:var(--text-2); line-height:1.5; margin:10px 2px 0; }
+  .entry-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); }
+  .entry-row:last-child { border-bottom:0; }
+  .entry-details { flex:1; min-width:0; }
+  .entry-reading { font-size:17px; font-weight:700; }
+  .entry-timestamp { font-size:12px; color:var(--text-2); margin-top:3px; }
+  .entry-actions { display:flex; gap:6px; flex-shrink:0; }
+  .entry-action { background:var(--bg-raised); color:var(--text-1); border:1px solid var(--border); border-radius:7px; padding:7px 9px; font-family:inherit; font-size:12px; font-weight:500; cursor:pointer; }
+  .entry-action.danger { color:var(--red); }
+  .entry-icon { width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;background:transparent;color:var(--text-2);border:0;border-radius:7px;cursor:pointer;font-size:17px; }
+  .entry-icon:hover { background:var(--bg-raised);color:var(--text-1); }
+  .entry-icon.danger { color:var(--red); }
+  .entry-edit { display:grid; grid-template-columns:1.2fr .8fr 1fr auto auto; gap:7px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .entry-edit .form-input { font-size:14px; padding:8px; min-width:0; }
+  @media(max-width:600px){ .entry-row{align-items:flex-start}.entry-actions{gap:4px}.entry-action{padding:7px 6px}.entry-edit{grid-template-columns:1fr 1fr}.entry-edit .entry-action{min-height:40px} }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 40px 16px; color: var(--text-3); }
+  .empty .icon { font-size: 38px; margin-bottom: 12px; }
+  .empty p { font-size: 14px; line-height: 1.6; }
+
+  /* TOAST */
+  #toast {
+    position: fixed; bottom: calc(24px + var(--safe-bot)); left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--green); color: #fff; font-size: 14px; font-weight: 500;
+    padding: 10px 20px; border-radius: 24px; pointer-events: none;
+    opacity: 0; transition: all .3s; white-space: nowrap; z-index: 100;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* IMPORT BANNER */
+  .import-box {
+    border: 2px dashed var(--blue);
+    border-radius: 12px; padding: 20px; text-align: center;
+    margin-bottom: 12px; cursor: pointer;
+  }
+  .import-box .icon { font-size: 32px; margin-bottom: 8px; }
+  .import-box p { font-size: 13px; color: var(--text-2); line-height: 1.6; }
+
+  /* INSTALL BANNER */
+  #install-banner {
+    background: linear-gradient(135deg, var(--blue-dim), var(--blue));
+    border-radius: 10px; padding: 13px 14px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+  }
+  #install-banner .icon { font-size: 22px; flex-shrink: 0; }
+  #install-banner .text { flex: 1; }
+  #install-banner .text strong { font-size: 13px; display: block; }
+  #install-banner .text span  { font-size: 11px; opacity: .8; }
+  #install-banner .close { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; opacity: .7; padding: 4px; }
+
+  /* Responsive phone and tablet layout */
+  @media (max-width: 600px) {
+    body { padding-bottom: calc(66px + var(--safe-bot)); }
+    nav { position:fixed; top:auto; bottom:0; left:0; right:0; height:calc(62px + var(--safe-bot)); padding:0 8px var(--safe-bot); justify-content:center; }
+    .nav-logo { display:none; }
+    .nav-tabs { width:100%; gap:4px; justify-content:space-around; }
+    .nav-tab { flex:1; min-width:0; padding:10px 4px; font-size:12px; }
+    .page { padding:12px; }
+    .hero-stat { padding:18px 12px; }
+    .hero-stat .value { font-size:clamp(34px, 10vw, 46px); }
+    .card { padding:13px; margin-bottom:10px; }
+    .form-row { gap:8px; }
+    .form-input.small { padding:9px 8px; font-size:14px; }
+    .stats-table { min-width:360px; }
+    .history-main { gap:8px; }
+    .history-reading { font-size:18px; }
+    .history-date { font-size:12px; }
+  }
+  @media (min-width: 601px) and (max-width: 900px) { .page { max-width:760px; padding:18px; } }
+
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">Power<span>Log</span></div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('home',this)">Home</button>
+    <button class="nav-tab" onclick="showPage('stats',this)">Stats</button>
+    <button class="nav-tab" onclick="showPage('history',this)">History</button>
+    <button class="nav-tab" onclick="showPage('entries',this)">Entries</button>
+    <button class="nav-tab" onclick="showPage('settings',this)">Settings</button>
+  </div>
+</nav>
+
+<!-- HOME -->
+<div id="page-home" class="page active">
+  <div id="install-banner" style="display:none" onclick="installApp()">
+    <div class="icon">📲</div>
+    <div class="text"><strong>Install PowerLog</strong><span>Add to home screen for offline use</span></div>
+    <button class="close" onclick="event.stopPropagation();hideBanner()">✕</button>
+  </div>
+
+  <div id="summary-section"></div>
+
+  <div class="card">
+    <div class="card-title">New Meter Reading</div>
+    <div class="form-group">
+      <label class="form-label">Meter Reading (kWh)</label>
+      <input class="form-input" type="number" id="input-reading" inputmode="decimal" placeholder="e.g. 77724.0" step="0.1" min="0">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-input small" type="date" id="input-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Time</label>
+        <input class="form-input small" type="time" id="input-time">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <input class="form-input small" type="text" id="input-notes" placeholder="e.g. Main meter, estimate…">
+    </div>
+    <button class="btn btn-primary" onclick="saveReading()">Save Reading</button>
+  </div>
+
+  <div class="chart-toggle">
+    <button class="chart-tab active" onclick="switchChart('kwh',this)">Consumption (kWh)</button>
+    <button class="chart-tab" onclick="switchChart('cost',this)">Cost</button>
+  </div>
+  <div class="card" style="padding-bottom:20px">
+    <div class="card-title" id="chart-title">Monthly Consumption</div>
+    <div class="chart-wrap"><canvas id="myChart"></canvas></div>
+  </div>
+</div>
+
+<!-- STATS (ECAS-style year comparison) -->
+<div id="page-stats" class="page">
+  <div class="card">
+    <div class="year-nav">
+      <button class="year-btn" onclick="changeYear(-1)">‹</button>
+      <div class="year-label" id="stats-year-label">2026</div>
+      <button class="year-btn" onclick="changeYear(+1)">›</button>
+    </div>
+
+    <div class="chart-toggle" style="margin-bottom:14px">
+      <button class="chart-tab active" onclick="switchStatsMode('kwh',this)">kWh</button>
+      <button class="chart-tab" onclick="switchStatsMode('cost',this)">Cost</button>
+    </div>
+
+    <div class="stats-table-wrap">
+      <table class="stats-table" id="stats-table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th id="col-this">This Year</th>
+            <th id="col-prev">Last Year</th>
+            <th>Change</th>
+            <th>%</th>
+          </tr>
+        </thead>
+        <tbody id="stats-tbody"></tbody>
+      </table>
+    </div>
+    <p class="stats-note">For intervals spanning months, average kWh per day is allocated by days covered in each month. A ~ marks these estimates; gaps across meter resets are not estimated.</p>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div id="page-history" class="page">
+  <div id="history-list"></div>
+</div>
+
+<!-- ENTRIES -->
+<div id="page-entries" class="page">
+  <div class="card">
+    <div class="card-title">All Entries</div>
+    <div id="entries-list"></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="page-settings" class="page">
+  <div class="card">
+    <div class="card-title">Appearance</div>
+    <div class="setting-row">
+      <div><div class="setting-label">Theme</div><div class="setting-sub">Choose light or dark appearance</div></div>
+      <button class="entry-action" id="theme-toggle" onclick="toggleTheme()" aria-pressed="false">Use light theme</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Google Drive Sync</div>
+    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">Connect the same Google account on each device. Readings, tariffs, and currency are stored in a PowerLog.csv file in your Drive. The first device creates the file; other devices load its data.</p>
+    <label class="form-label" for="google-client-id">Google OAuth Client ID</label>
+    <input class="form-input small" style="font-size:13px;width:100%;margin-bottom:9px" type="text" id="google-client-id" placeholder="123456789.apps.googleusercontent.com" autocomplete="off">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="entry-action" onclick="saveGoogleClientId()">Save Client ID</button>
+      <button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="connectGoogleDrive()">Connect Google Drive</button>
+      <button class="entry-action" id="drive-sync-now" onclick="syncDriveNow()" hidden>Sync now</button>
+    </div>
+    <p id="drive-status" class="setting-sub" role="status" style="margin-top:10px">Not connected</p>
+    <p class="setting-sub" style="line-height:1.5;margin-top:8px">Set up a Google OAuth Web client and enable the Google Drive API. Add this app’s HTTPS address or localhost as an authorized JavaScript origin. Only the OAuth Client ID belongs here; never add a client secret.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Electricity Tariffs</div>
+    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">Set when each unit rate and standing charge applies. End date is optional.</p>
+    <div id="tariff-list"></div>
+    <div class="setting-row" style="flex-wrap:wrap;gap:8px">
+      <input class="setting-input" style="flex:1;min-width:110px" type="number" id="tariff-rate" step="0.0001" min="0" placeholder="Unit rate" aria-label="Unit rate">
+      <input class="setting-input" style="flex:1;min-width:110px" type="number" id="tariff-standing" step="0.0001" min="0" placeholder="Daily charge" aria-label="Standing charge">
+      <input class="setting-input" style="flex:1;min-width:130px" type="date" id="tariff-start" aria-label="Effective start date">
+      <input class="setting-input" style="flex:1;min-width:130px" type="date" id="tariff-end" aria-label="Effective end date">
+      <button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="addTariff()">Add tariff</button>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">Currency Symbol</div><div class="setting-sub">Shown on costs</div></div>
+      <input class="setting-input" type="text" id="setting-currency" maxlength="3" oninput="saveSetting('currency')">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Import reconciled readings</div>
+    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">This CSV combines the earlier ECAS history with your new meter readings from Excel. Importing replaces current readings; export a backup first if needed.</p>
+    <input type="file" id="readings-csv" accept=".csv,text/csv" style="display:none" onchange="handleCSVFile(this)">
+    <button class="btn btn-primary" onclick="document.getElementById('readings-csv').click()">Choose reconciled CSV</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Data</div>
+    <div class="setting-row">
+      <div><div class="setting-label">Export Readings</div><div class="setting-sub">Download as CSV</div></div>
+      <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px" onclick="exportCSV()">Export</button>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">Total Readings</div><div class="setting-sub" id="total-count">0 entries</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Danger Zone</div>
+    <button class="btn btn-danger" onclick="clearData()">Clear All Readings</button>
+  </div>
+</div>
+
+<div id="toast">Saved!</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+// ── ECAS DATA ──────────────────────────────────────────────────────────
+const ECAS_IMPORT = {"readings":[{"id":4000,"ts":"2022-11-29T12:26:00","reading":72611.0,"notes":"Apartment Handover"},{"id":5000,"ts":"2022-12-09T12:26:00","reading":72641.0,"notes":""},{"id":6000,"ts":"2023-01-01T12:27:00","reading":72751.0,"notes":"New year"},{"id":7000,"ts":"2023-03-02T16:38:00","reading":73012.0,"notes":""},{"id":8000,"ts":"2023-05-15T17:22:00","reading":73237.0,"notes":"15May"},{"id":9000,"ts":"2023-06-10T11:02:00","reading":73340.0,"notes":""},{"id":10000,"ts":"2023-07-18T17:06:00","reading":73515.0,"notes":""},{"id":11000,"ts":"2023-08-03T17:20:00","reading":73582.0,"notes":""},{"id":12000,"ts":"2023-08-15T18:33:00","reading":73631.0,"notes":""},{"id":13000,"ts":"2023-08-29T17:14:00","reading":73699.0,"notes":""},{"id":14000,"ts":"2023-09-23T15:13:00","reading":73799.0,"notes":""},{"id":15000,"ts":"2023-10-01T10:38:00","reading":73830.0,"notes":""},{"id":16000,"ts":"2023-11-01T16:55:00","reading":73958.0,"notes":""},{"id":17000,"ts":"2024-01-09T16:25:00","reading":74158.0,"notes":""},{"id":18000,"ts":"2024-02-03T17:00:00","reading":74280.0,"notes":""},{"id":19000,"ts":"2024-02-22T18:17:00","reading":74365.0,"notes":""},{"id":20000,"ts":"2024-03-11T17:33:00","reading":74450.0,"notes":""},{"id":21000,"ts":"2024-03-21T15:51:00","reading":74492.0,"notes":""},{"id":22000,"ts":"2024-04-01T11:17:00","reading":74542.0,"notes":""},{"id":23000,"ts":"2024-05-10T17:50:00","reading":74714.0,"notes":""},{"id":24000,"ts":"2024-05-25T11:18:00","reading":74782.0,"notes":""},{"id":25000,"ts":"2024-06-15T17:43:00","reading":74881.0,"notes":""},{"id":26000,"ts":"2024-07-31T13:49:00","reading":75084.0,"notes":""},{"id":27000,"ts":"2024-08-09T18:07:00","reading":75129.0,"notes":""},{"id":28000,"ts":"2024-08-13T09:45:00","reading":75145.0,"notes":""},{"id":29000,"ts":"2024-09-17T18:11:00","reading":75321.0,"notes":""},{"id":30000,"ts":"2024-10-07T19:53:00","reading":75414.0,"notes":""},{"id":31000,"ts":"2024-11-12T18:18:00","reading":75582.0,"notes":""},{"id":32000,"ts":"2024-11-23T14:57:00","reading":75630.0,"notes":""},{"id":33000,"ts":"2025-01-13T11:20:00","reading":75756.0,"notes":""},{"id":34000,"ts":"2025-03-30T20:56:00","reading":76179.0,"notes":""},{"id":35000,"ts":"2025-06-07T13:15:00","reading":76497.0,"notes":""},{"id":36000,"ts":"2025-07-05T16:45:00","reading":76621.0,"notes":""},{"id":37000,"ts":"2025-08-02T10:07:00","reading":76744.0,"notes":""},{"id":38000,"ts":"2025-08-28T10:04:00","reading":76849.0,"notes":""},{"id":39000,"ts":"2025-11-07T17:08:00","reading":77219.0,"notes":""},{"id":40000,"ts":"2025-11-09T13:17:00","reading":77229.0,"notes":""},{"id":41000,"ts":"2025-12-07T13:17:00","reading":77399.0,"notes":""},{"id":42000,"ts":"2025-12-13T13:17:00","reading":77442.0,"notes":""},{"id":43000,"ts":"2025-12-14T13:18:00","reading":77447.0,"notes":""},{"id":44000,"ts":"2025-12-16T13:18:00","reading":77462.0,"notes":""},{"id":45000,"ts":"2025-12-23T13:18:00","reading":77508.0,"notes":""},{"id":46000,"ts":"2025-12-30T13:19:00","reading":77556.0,"notes":""},{"id":47000,"ts":"2026-01-01T13:19:00","reading":77567.0,"notes":""},{"id":48000,"ts":"2026-01-24T16:21:00","reading":77724.0,"notes":""},{"id":49000,"ts":"2026-05-09T18:13:00","reading":1007.0,"notes":""},{"id":50000,"ts":"2026-06-30T18:53:00","reading":1275.0,"notes":""}],"settings":{"rate":0.3768,"standing":3.332,"currency":"€"}};
+
+// ── STATE ──────────────────────────────────────────────────────────────
+let readings = JSON.parse(localStorage.getItem('pl_readings') || '[]');
+let settings = JSON.parse(localStorage.getItem('pl_settings') || '{}');
+settings = { rate: 0.28, standing: 0.45, currency: '$', ...settings };
+let tariffs = JSON.parse(localStorage.getItem('pl_tariffs') || 'null');
+if (!Array.isArray(tariffs) || !tariffs.length) {
+  tariffs = [{ id: Date.now(), rate: Number(settings.rate)||0, standing: Number(settings.standing)||0, start: '0001-01-01', end: '' }];
+  localStorage.setItem('pl_tariffs', JSON.stringify(tariffs));
+}
+let driveAccessToken=null, driveFileId=null, driveSaveTimer=null, driveSaveQueue=Promise.resolve(), driveLoading=false, driveDirty=false, driveEditVersion=0;
+
+let myChart  = null;
+let chartMode = 'kwh';
+let statsYear = new Date().getFullYear();
+let statsMode = 'kwh';
+let deferredPrompt = null;
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ── INIT ───────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  applyTheme(localStorage.getItem('pl_theme')||'dark');
+  const now = new Date();
+  document.getElementById('input-date').value = now.toISOString().slice(0,10);
+  document.getElementById('input-time').value = now.toTimeString().slice(0,5);
+  loadSettings();
+  document.getElementById('google-client-id').value=settings.googleClientId||'';
+  setDriveStatus('Not connected');
+  renderTariffs();
+  renderSummary();
+  renderChart();
+  renderHistory();
+  renderEntries();
+  renderStats();
+  updateCount();
+  if (localStorage.getItem('pl_banner_dismissed')) hideBanner();
+});
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'flex';
+});
+
+// ── NAV ────────────────────────────────────────────────────────────────
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  else document.querySelector(`[onclick*="'${id}'"]`).classList.add('active');
+  if (id === 'stats')   renderStats();
+  if (id === 'history') renderHistory();
+  if (id === 'entries') renderEntries();
+}
+
+function applyTheme(theme) {
+  const selected=theme==='light'?'light':'dark';
+  document.documentElement.dataset.theme=selected;
+  const button=document.getElementById('theme-toggle');
+  if(button){button.textContent=selected==='dark'?'Use light theme':'Use dark theme';button.setAttribute('aria-pressed',String(selected==='light'));}
+  const meta=document.querySelector('meta[name="theme-color"]');
+  if(meta)meta.content=selected==='dark'?'#1a1f2e':'#ffffff';
+}
+function toggleTheme() {
+  const theme=document.documentElement.dataset.theme==='light'?'dark':'light';
+  localStorage.setItem('pl_theme',theme);applyTheme(theme);renderChart();
+}
+
+// ── SETTINGS ───────────────────────────────────────────────────────────
+function loadSettings() {
+  document.getElementById('setting-currency').value = settings.currency;
+}
+function saveSetting(key) {
+  const map = { rate:'setting-rate', standing:'setting-standing', currency:'setting-currency' };
+  const val = document.getElementById(map[key]).value;
+  settings[key] = key === 'currency' ? val : parseFloat(val) || 0;
+  persistData();
+  renderTariffs(); renderSummary(); renderChart(); renderStats();
+}
+
+// ── GOOGLE DRIVE DATA SOURCE ──────────────────────────────────────────
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const DRIVE_FILE_NAME='PowerLog.csv';
+function setDriveStatus(message,isError=false) {
+  const el=document.getElementById('drive-status'); if(!el)return;
+  el.textContent=message; el.style.color=isError?'var(--red)':'';
+  const sync=document.getElementById('drive-sync-now'); if(sync)sync.hidden=!driveAccessToken;
+}
+function saveGoogleClientId() {
+  const id=document.getElementById('google-client-id').value.trim();
+  if(!id){toast('Enter a Google OAuth Client ID','#ef4444');return;}
+  settings.googleClientId=id;localStorage.setItem('pl_settings',JSON.stringify(settings));
+  toast('Client ID saved ✓');
+}
+function connectGoogleDrive() {
+  const id=document.getElementById('google-client-id').value.trim();
+  if(!id){toast('Enter your Google OAuth Client ID','#ef4444');return;}
+  settings.googleClientId=id;localStorage.setItem('pl_settings',JSON.stringify(settings));
+  if(!window.google?.accounts?.oauth2){setDriveStatus('Google sign-in did not load. Check your connection and reload.',true);return;}
+  const client=google.accounts.oauth2.initTokenClient({client_id:id,scope:DRIVE_SCOPE,callback:async response=>{
+    if(response.error||!response.access_token){setDriveStatus('Google sign-in failed: '+(response.error_description||response.error||'no access token'),true);return;}
+    driveAccessToken=response.access_token;setDriveStatus('Connecting to Drive…');
+    try{const loaded=await loadOrCreateDriveFile();if(!loaded){driveAccessToken=null;setDriveStatus('Connection canceled · local data kept');return;}setDriveStatus('Connected · synced with Google Drive');toast('Google Drive connected ✓');}
+    catch(error){driveAccessToken=null;setDriveStatus(error.message||'Could not connect to Google Drive',true);}
+  }});
+  client.requestAccessToken({prompt:''});
+}
+async function driveRequest(url,options={}) {
+  const response=await fetch(url,{...options,headers:{Authorization:'Bearer '+driveAccessToken,...(options.headers||{})}});
+  if(!response.ok){let detail='';try{detail=(await response.json()).error?.message||'';}catch{};if(response.status===401)driveAccessToken=null;throw new Error(detail||('Google Drive request failed ('+response.status+')'));}
+  return response;
+}
+function csvEscape(value) { const s=String(value??'');return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+function serializeDriveCSV() {
+  const rows=[['type','id','date','time','reading_kwh','notes','unit_rate','standing_charge','effective_start','effective_end','currency']];
+  readings.forEach(r=>{const [date,time='12:00']=String(r.ts||'').split('T');rows.push(['reading',r.id,date,time,r.reading,r.notes||'','','','','','']);});
+  tariffs.forEach(t=>rows.push(['tariff',t.id,'','','','',t.rate,t.standing,t.start,t.end||'','']));
+  rows.push(['settings','','','','','','','','','',settings.currency||'']);
+  return rows.map(row=>row.map(csvEscape).join(',')).join('\r\n')+'\r\n';
+}
+function applyDriveCSV(csv) {
+  const rows=parseCSV(csv); if(!rows.length)throw new Error('The Drive CSV is empty.');
+  const headers=rows.shift().map(v=>v.trim().toLowerCase());
+  const col=name=>headers.indexOf(name);
+  if(col('type')<0||col('reading_kwh')<0||col('unit_rate')<0)throw new Error('This is not a PowerLog data file.');
+  const nextReadings=[],nextTariffs=[];let nextCurrency=settings.currency;
+  rows.forEach((row,i)=>{
+    const type=row[col('type')];
+    if(type==='reading'){
+      const date=(row[col('date')]||'').trim(),time=(row[col('time')]||'12:00').trim(),value=Number(row[col('reading_kwh')]);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value))throw new Error('Invalid reading on CSV row '+(i+2)+'.');
+      nextReadings.push({id:Number(row[col('id')])||Date.now()+i,ts:date+'T'+(time||'12:00'),reading:value,notes:row[col('notes')]||''});
+    } else if(type==='tariff'){
+      const start=(row[col('effective_start')]||'').trim(),end=(row[col('effective_end')]||'').trim();
+      const rate=Number(row[col('unit_rate')]),standing=Number(row[col('standing_charge')]);
+      if(!start||!Number.isFinite(rate)||!Number.isFinite(standing))throw new Error('Invalid tariff on CSV row '+(i+2)+'.');
+      nextTariffs.push({id:Number(row[col('id')])||Date.now()+i,rate,standing,start,end});
+    } else if(type==='settings')nextCurrency=row[col('currency')]||nextCurrency;
+  });
+  if(!nextTariffs.length)throw new Error('The Drive CSV contains no tariffs.');
+  readings=nextReadings;tariffs=nextTariffs;settings.currency=nextCurrency;
+  localStorage.setItem('pl_readings',JSON.stringify(readings));localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));localStorage.setItem('pl_settings',JSON.stringify(settings));
+  loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderEntries();renderStats();updateCount();
+}
+async function uploadDriveCSV(csv) {
+  if(!driveAccessToken)return;
+  setDriveStatus('Syncing to Google Drive…');
+  await driveRequest('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(driveFileId)+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'text/csv'},body:csv});
+  setDriveStatus('Connected · synced with Google Drive');
+}
+async function loadOrCreateDriveFile() {
+  const q="appProperties has { key='powerlog' and value='true' } and trashed = false";
+  const list=await driveRequest('https://www.googleapis.com/drive/v3/files?spaces=drive&pageSize=10&fields=files(id,name)&q='+encodeURIComponent(q));
+  const files=(await list.json()).files||[];
+  if(files.length){driveFileId=files[0].id;driveLoading=true;try{
+    const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(driveFileId)+'?alt=media');
+    const csv=await response.text();
+    if(readings.length&&!confirm('PowerLog.csv already exists. Press OK to load Drive and replace this browser’s readings and tariffs. Press Cancel to keep this browser’s data and upload it to Drive instead, replacing the Drive file. Export a backup first if needed.')){
+      await uploadDriveCSV(serializeDriveCSV());driveDirty=false;return true;
+    }
+    applyDriveCSV(csv);
+    driveDirty=false;
+  }finally{driveLoading=false;}return true;
+  }
+  const created=await driveRequest('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FILE_NAME,mimeType:'text/csv',appProperties:{powerlog:'true'}})});
+  driveFileId=(await created.json()).id;
+  await uploadDriveCSV(serializeDriveCSV());
+  driveDirty=false;
+  return true;
+}
+function persistData() {
+  localStorage.setItem('pl_readings',JSON.stringify(readings));
+  localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));
+  localStorage.setItem('pl_settings',JSON.stringify(settings));
+  if(!driveAccessToken||driveLoading)return;
+  driveDirty=true;driveEditVersion++;
+  clearTimeout(driveSaveTimer);
+  driveSaveTimer=setTimeout(()=>{
+    const snapshot=serializeDriveCSV(),version=driveEditVersion;
+    driveSaveQueue=driveSaveQueue.then(async()=>{await uploadDriveCSV(snapshot);if(version===driveEditVersion)driveDirty=false;}).catch(error=>setDriveStatus(error.message||'Drive sync failed',true));
+  },500);
+}
+async function syncDriveNow() {
+  if(!driveAccessToken){toast('Connect Google Drive first','#ef4444');return;}
+  try{
+    clearTimeout(driveSaveTimer);driveSaveTimer=null;
+    if(driveDirty){const version=driveEditVersion,snapshot=serializeDriveCSV();driveSaveQueue=driveSaveQueue.then(async()=>{await uploadDriveCSV(snapshot);if(version===driveEditVersion)driveDirty=false;});await driveSaveQueue;setDriveStatus('Connected · synced with Google Drive');toast('Local changes uploaded ✓');return;}
+    await driveSaveQueue;const loaded=await loadOrCreateDriveFile();if(!loaded){setDriveStatus('Sync canceled · local data kept');return;}setDriveStatus('Connected · synced with Google Drive');toast('Google Drive synced ✓');
+  }
+  catch(error){setDriveStatus(error.message||'Drive sync failed',true);}
+}
+
+function renderTariffs() {
+  const el=document.getElementById('tariff-list'); if(!el)return;
+  const ordered=[...tariffs].sort((a,b)=>a.start.localeCompare(b.start));
+  el.innerHTML=ordered.length?ordered.map(t=>'<div class="setting-row"><div style="flex:1"><div class="setting-label">'+escapeEntryText(t.start==='0001-01-01'?'From beginning':t.start)+(t.end?' – '+escapeEntryText(t.end):' – No end date')+'</div><div class="setting-sub">'+escapeEntryText(settings.currency)+Number(t.rate).toFixed(4)+'/kWh · '+escapeEntryText(settings.currency)+Number(t.standing).toFixed(4)+'/day</div></div><button class="entry-icon danger" aria-label="Delete tariff" title="Delete tariff" onclick="deleteTariff('+Number(t.id)+')">×</button></div>').join(''):'<div class="empty"><p>No tariffs yet. Add one below.</p></div>';
+}
+function addTariff() {
+  const rate=parseFloat(document.getElementById('tariff-rate').value), standing=parseFloat(document.getElementById('tariff-standing').value);
+  const start=document.getElementById('tariff-start').value, end=document.getElementById('tariff-end').value;
+  if(!Number.isFinite(rate)||rate<0||!Number.isFinite(standing)||standing<0){toast('Enter valid tariff amounts','#ef4444');return;}
+  if(!start){toast('Pick an effective start date','#ef4444');return;}
+  if(end&&end<start){toast('End date must be on or after start date','#ef4444');return;}
+  const adjusted=tariffs.map(t=>({...t}));
+  adjusted.forEach(t=>{if(t.start<start&&(!t.end||t.end>=start))t.end=previousDate(start);});
+  const overlaps=adjusted.some(t=>start<=(t.end||'9999-12-31')&&(!end||end>=t.start));
+  if(overlaps){toast('Tariff dates overlap an existing tariff','#ef4444');return;}
+  tariffs=adjusted; tariffs.push({id:Date.now(),rate,standing,start,end}); persistData();
+  ['tariff-rate','tariff-standing','tariff-start','tariff-end'].forEach(id=>document.getElementById(id).value='');
+  renderTariffs(); renderSummary(); renderChart(); renderStats(); toast('Tariff added ✓');
+}
+function deleteTariff(id) {
+  if(tariffs.length<2){toast('Keep at least one tariff','#ef4444');return;}
+  if(!confirm('Delete this tariff?'))return;
+  tariffs=tariffs.filter(t=>Number(t.id)!==Number(id));persistData();
+  renderTariffs();renderSummary();renderChart();renderStats();
+}
+function tariffForDate(date) { return tariffs.find(t=>date>=t.start&&(!t.end||date<=t.end))||{rate:0,standing:0}; }
+function shiftDate(date,days) { const [y,m,d]=date.split('-').map(Number);return new Date(Date.UTC(y,m-1,d+days)).toISOString().slice(0,10); }
+function nextDate(date) { return shiftDate(date,1); }
+function previousDate(date) { return shiftDate(date,-1); }
+
+// ── SAVE READING ───────────────────────────────────────────────────────
+function saveReading() {
+  const val = parseFloat(document.getElementById('input-reading').value);
+  if (isNaN(val) || val < 0) { toast('Enter a valid reading','#ef4444'); return; }
+  const date  = document.getElementById('input-date').value;
+  const time  = document.getElementById('input-time').value;
+  const notes = document.getElementById('input-notes').value.trim();
+  if (!date) { toast('Pick a date','#ef4444'); return; }
+  const sorted = [...readings].sort((a,b) => new Date(a.ts)-new Date(b.ts));
+  const last   = sorted[sorted.length-1];
+  if (last && val < last.reading) {
+    if (!confirm(`Reading (${val}) is lower than last (${last.reading}). Continue?`)) return;
+  }
+  readings.push({ id: Date.now(), ts: date+'T'+(time||'12:00'), reading: val, notes });
+  persistData();
+  document.getElementById('input-reading').value = '';
+  document.getElementById('input-notes').value   = '';
+  toast('Reading saved ✓');
+  renderSummary(); renderChart(); renderStats(); renderHistory(); renderEntries(); renderEntries(); updateCount();
+}
+
+// ── MONTHLY CALCS ──────────────────────────────────────────────────────
+function getMonthlyData() {
+  if (readings.length < 2) return [];
+  const sorted = [...readings].sort((a,b) => new Date(a.ts)-new Date(b.ts));
+  const months = {};
+  for (let i=1; i<sorted.length; i++) {
+    const prev=sorted[i-1], curr=sorted[i];
+    // A lower value marks a meter replacement/reset; never interpolate across meters.
+    if (curr.reading < prev.reading) continue;
+    const start=new Date(prev.ts), end=new Date(curr.ts);
+    const elapsedDays=(end-start)/86400000;
+    if (!(elapsedDays>0)) continue;
+    const dailyKwh=(curr.reading-prev.reading)/elapsedDays;
+    const crossesMonths=prev.ts.slice(0,7)!==curr.ts.slice(0,7);
+    let cursor=start;
+    while (cursor<end) {
+      const monthStart=new Date(cursor.getFullYear(),cursor.getMonth()+1,1);
+      const segmentEnd=monthStart<end?monthStart:end;
+      const days=(segmentEnd-cursor)/86400000;
+      if (!(days>0)) break;
+      const dateKey=cursor.getFullYear()+'-'+String(cursor.getMonth()+1).padStart(2,'0')+'-'+String(cursor.getDate()).padStart(2,'0');
+      const active=tariffForDate(dateKey);
+      const tariffBoundary=tariffs.flatMap(t=>[t.start,t.end?nextDate(t.end):'']).filter(d=>d&&d>dateKey).sort()[0];
+      const segmentDays=tariffBoundary?Math.min(days,(new Date(tariffBoundary+'T00:00:00')-cursor)/86400000):days;
+      const covered=Math.max(0,segmentDays);
+      const key=cursor.getFullYear()+'-'+String(cursor.getMonth()+1).padStart(2,'0');
+      if (!months[key]) months[key]={kwh:0,days:0,label:fmtMonth(key),estimated:false,energyCost:0,standingCost:0};
+      months[key].kwh += dailyKwh*covered;
+      months[key].days += covered;
+      months[key].energyCost += dailyKwh*covered*active.rate;
+      months[key].standingCost += covered*active.standing;
+      if (crossesMonths) months[key].estimated=true;
+      if(covered<days) cursor=new Date(cursor.getTime()+covered*86400000);
+      else cursor=segmentEnd;
+    }
+  }
+  return Object.entries(months).sort(([a],[b])=>a.localeCompare(b)).map(([key,v])=>{
+    const energyCost=v.energyCost;
+    const standingCost=v.standingCost;
+    return {...v,key,cost:energyCost+standingCost,energyCost,standingCost};
+  });
+}
+
+// Build year→month map  { 2024: { 1: {kwh,cost,...}, ... }, ... }
+function getYearMap() {
+  const monthly = getMonthlyData();
+  const map = {};
+  monthly.forEach(m => {
+    const [y, mo] = m.key.split('-');
+    if (!map[+y]) map[+y] = {};
+    map[+y][+mo] = m;
+  });
+  return map;
+}
+
+function getStatsYearData(year) {
+  const actual=getYearMap()[year]||{};
+  const data={};
+  for(let month=1;month<=12;month++) data[month]=actual[month]||null;
+  return data;
+}
+
+function fmtMonth(key) {
+  const [y,m] = key.split('-');
+  return new Date(+y,+m-1,1).toLocaleString('default',{month:'short',year:'2-digit'});
+}
+
+// ── SUMMARY ────────────────────────────────────────────────────────────
+function renderSummary() {
+  const el  = document.getElementById('summary-section');
+  const sorted  = [...readings].sort((a,b) => new Date(a.ts)-new Date(b.ts));
+  const monthly = getMonthlyData();
+  const curr    = monthly[monthly.length-1];
+  const prev    = monthly[monthly.length-2];
+  const last    = sorted[sorted.length-1];
+  const c       = settings.currency;
+  const currentYear = new Date().getFullYear();
+  const yearMonthly = monthly.filter(m => m.key.startsWith(String(currentYear)+'-'));
+  const yearKwh = yearMonthly.reduce((sum,m) => sum+m.kwh,0);
+  const yearCost = yearMonthly.reduce((sum,m) => sum+m.cost,0);
+  const yearEstimated = yearMonthly.some(m => m.estimated);
+
+  if (!last) {
+    el.innerHTML = `<div class="empty"><div class="icon">⚡</div><p>Add your first meter reading below to start tracking.</p></div>`;
+    return;
+  }
+
+  let trendBadge = '';
+  if (curr && prev && prev.kwh > 0) {
+    const pct = ((curr.kwh-prev.kwh)/prev.kwh*100).toFixed(0);
+    const cls = pct > 10 ? 'badge-red' : pct < -10 ? 'badge-green' : 'badge-amber';
+    trendBadge = `<span class="badge ${cls}">${pct>0?'+':''}${pct}% vs last</span>`;
+  }
+
+  el.innerHTML = `
+    <div class="hero-stat card">
+      <div class="label">Latest Meter Reading</div>
+      <div class="value">${last.reading.toLocaleString()}<span class="unit">kWh</span></div>
+      <div class="sub">${fmt(last.ts)}${last.notes?' · '+last.notes:''}</div>
+    </div>
+    <div class="summary-group-title">This Year · ${currentYear}</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="label">This Year Consumption</div><div class="value blue">${yearEstimated?'~':''}${yearKwh.toFixed(1)} kWh</div></div>
+      <div class="stat-box"><div class="label">This Year Cost</div><div class="value amber">${yearEstimated?'~':''}${c}${yearCost.toFixed(2)}</div></div>
+    </div>
+    ${curr ? `<div class="summary-group-title">This Month</div><div class="stat-grid">
+      <div class="stat-box"><div class="label">This Month Usage</div><div class="value blue">${curr.estimated?'~':''}${curr.kwh.toFixed(1)} kWh</div>${trendBadge}</div>
+      <div class="stat-box"><div class="label">This Month Cost</div><div class="value amber">${c}${curr.cost.toFixed(2)}</div></div>
+      <div class="stat-box"><div class="label">Energy Cost</div><div class="value">${c}${curr.energyCost.toFixed(2)}</div></div>
+      <div class="stat-box"><div class="label">Avg Daily Cost</div><div class="value green">${c}${(curr.cost/(curr.days||1)).toFixed(2)}</div></div>
+    </div>` : ''}`;
+}
+
+// ── CHART ──────────────────────────────────────────────────────────────
+function renderChart() {
+  const monthly = getMonthlyData();
+  const labels  = monthly.map(m => m.label);
+  const data    = chartMode === 'kwh' ? monthly.map(m => +m.kwh.toFixed(1)) : monthly.map(m => +m.cost.toFixed(2));
+  const color   = chartMode === 'kwh' ? '#3b82f6' : '#f59e0b';
+  document.getElementById('chart-title').textContent = chartMode === 'kwh' ? 'Monthly Consumption' : 'Monthly Cost';
+  const ctx = document.getElementById('myChart').getContext('2d');
+  if (myChart) myChart.destroy();
+  if (!monthly.length) {
+    ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+    ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--text-3'); ctx.font='13px Inter'; ctx.textAlign='center';
+    ctx.fillText('Add 2+ readings to see chart', ctx.canvas.width/2, 80); return;
+  }
+  const css=getComputedStyle(document.documentElement), bg=css.getPropertyValue('--bg-card').trim(), border=css.getPropertyValue('--border').trim(), text=css.getPropertyValue('--text-2').trim();
+  myChart = new Chart(ctx, {
+    type:'bar', data:{ labels, datasets:[{ data, backgroundColor:color+'33', borderColor:color,
+      borderWidth:2, borderRadius:6, hoverBackgroundColor:color+'66' }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ backgroundColor:bg, borderColor:border,
+        borderWidth:1, titleColor:text, bodyColor:css.getPropertyValue('--text-1').trim(),
+        callbacks:{ label: c => chartMode==='kwh' ? `${c.parsed.y} kWh` : `${settings.currency}${c.parsed.y.toFixed(2)}` }}},
+      scales:{
+        x:{ grid:{color:border}, ticks:{color:text,font:{size:10}} },
+        y:{ grid:{color:border}, ticks:{color:text,font:{size:10},
+            callback: v => chartMode==='kwh' ? v+' kWh' : settings.currency+v }}
+      }
+    }
+  });
+}
+function switchChart(mode, btn) {
+  chartMode = mode;
+  document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderChart();
+}
+
+// ── STATS TABLE (ECAS-style) ───────────────────────────────────────────
+function renderStats() {
+  document.getElementById('stats-year-label').textContent = statsYear;
+  const c = settings.currency;
+  const thisY = getStatsYearData(statsYear);
+  const prevY = getStatsYearData(statsYear-1);
+  document.getElementById('col-this').textContent = statsYear;
+  document.getElementById('col-prev').textContent = statsYear-1;
+  let totalThis=0,totalPrev=0,hasThis=false,hasPrev=false,estimatedThis=false,estimatedPrev=false;
+  let rows='';
+  for(let m=1;m<=12;m++){
+    const th=thisY[m],pr=prevY[m];
+    const thisVal=th?(statsMode==='kwh'?th.kwh:th.cost):0;
+    const prevVal=pr?(statsMode==='kwh'?pr.kwh:pr.cost):0;
+    if(th){totalThis+=thisVal;hasThis=true;estimatedThis=estimatedThis||th.estimated;}
+    if(pr){totalPrev+=prevVal;hasPrev=true;estimatedPrev=estimatedPrev||pr.estimated;}
+    const unit=statsMode==='kwh'?' kWh':'';
+    const pfx=statsMode==='cost'?c:'';
+    let diffStr='<span class="neutral">—</span>',pctStr='<span class="neutral">—</span>';
+    let cls='neutral',sign='',diff=0,pct=0;
+    if(th&&pr){
+      diff=thisVal-prevVal;pct=prevVal>0?diff/prevVal*100:(thisVal>0?100:0);
+      cls=diff>0?'up':diff<0?'down':'neutral';sign=diff>0?'+':'';
+      diffStr=diff!==0?'<span class="'+cls+'">'+sign+pfx+diff.toFixed(1)+unit+'</span>':'<span class="neutral">—</span>';
+      pctStr=(prevVal>0||thisVal>0)?'<span class="'+cls+'">'+sign+pct.toFixed(1)+'%</span>':'<span class="neutral">—</span>';
+    }
+    const thisStr=th?(th.estimated?'~':'')+pfx+thisVal.toFixed(1)+unit:'<span class="zero-cell">—</span>';
+    const prevStr=pr?(pr.estimated?'~':'')+pfx+prevVal.toFixed(1)+unit:'<span class="zero-cell">—</span>';
+    rows+='<tr><td class="month-cell">'+MONTHS[m-1]+' '+statsYear+'</td><td>'+thisStr+'</td><td>'+prevStr+'</td><td>'+diffStr+'</td><td>'+pctStr+'</td></tr>';
+  }
+  const tDiff=totalThis-totalPrev;
+  const tPct=totalPrev>0?tDiff/totalPrev*100:(totalThis>0?100:0);
+  const tCls=tDiff>0?'up':tDiff<0?'down':'neutral';
+  const tSign=tDiff>0?'+':'';
+  const unit=statsMode==='kwh'?' kWh':'';
+  const pfx=statsMode==='cost'?c:'';
+  const estThis=estimatedThis?'~':'';
+  const estPrev=estimatedPrev?'~':'';
+  const totalDiffStr=hasThis&&hasPrev?'<span class="'+tCls+'">'+tSign+(estimatedThis||estimatedPrev?'~':'')+pfx+tDiff.toFixed(1)+unit+'</span>':'<span class="neutral">—</span>';
+  const totalPctStr=hasThis&&hasPrev?'<span class="'+tCls+'">'+tSign+tPct.toFixed(1)+'%</span>':'<span class="neutral">—</span>';
+  rows+='<tr class="total-row"><td>Total</td><td>'+estThis+pfx+totalThis.toFixed(1)+unit+'</td><td>'+estPrev+pfx+totalPrev.toFixed(1)+unit+'</td><td>'+totalDiffStr+'</td><td>'+totalPctStr+'</td></tr>';
+  document.getElementById('stats-tbody').innerHTML=rows;
+}
+
+function changeYear(delta) {
+  statsYear += delta;
+  renderStats();
+}
+function switchStatsMode(mode, btn) {
+  statsMode = mode;
+  document.querySelectorAll('#page-stats .chart-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderStats();
+}
+
+// ── HISTORY ────────────────────────────────────────────────────────────
+function renderHistory() {
+  const el      = document.getElementById('history-list');
+  const monthly = getMonthlyData();
+  const sorted  = [...readings].sort((a,b) => new Date(b.ts)-new Date(a.ts));
+  const c       = settings.currency;
+
+  if (!readings.length) {
+    el.innerHTML = `<div class="empty"><div class="icon">📋</div><p>No readings yet.</p></div>`; return;
+  }
+
+  let html = '';
+  if (monthly.length) {
+    html += `<div class="card"><div class="card-title">Monthly Summary</div>`;
+    [...monthly].reverse().forEach(m => {
+      html += `<div class="reading-item">
+        <div><div class="reading-kwh">${m.label}</div>
+             <div class="reading-date">${m.estimated?'~':''}${m.kwh.toFixed(1)} kWh · ${m.days.toFixed(0)} days</div></div>
+        <div style="text-align:right">
+          <div class="reading-cost">${c}${m.cost.toFixed(2)}</div>
+          <div class="reading-meter">${c}${(m.cost/m.days).toFixed(2)}/day</div>
+        </div></div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<div class="card"><div class="card-title">All Readings</div>`;
+  sorted.forEach((r,i) => {
+    const prev = sorted[i+1];
+    const reset = prev && r.reading < prev.reading;
+    const kwh = prev && !reset ? r.reading-prev.reading : null;
+    html += `<div class="reading-item">
+      <div style="flex:1;min-width:0"><div class="history-main"><div class="history-reading">${Number(r.reading).toLocaleString(undefined,{maximumFractionDigits:3})} kWh</div><div class="history-date">${fmt(r.ts)}</div></div>
+           ${r.notes?`<div class="reading-date">${r.notes}</div>`:''}
+           ${reset?'<div class="reading-meter">New meter series</div>':(kwh!==null?`<div class="reading-meter">+${kwh.toFixed(1)} kWh since prev</div>`:'')}
+      </div>
+      <button onclick="deleteReading(${r.id})" style="background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;padding:4px">✕</button>
+    </div>`;
+  });
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function escapeEntryText(value) {
+  return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function formatEntryTimestamp(ts) {
+  const d=new Date(ts);
+  return d.toLocaleString('default',{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'});
+}
+function renderEntries() {
+  const el=document.getElementById('entries-list'); if(!el)return;
+  if(!readings.length){el.innerHTML='<div class="empty"><div class="icon">📋</div><p>No readings yet.</p></div>';return;}
+  const sorted=[...readings].sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+  let html='';
+  sorted.forEach(r=>{
+    const id=String(r.id),parts=String(r.ts||'').split('T'),date=parts[0]||'',time=parts[1]||'12:00';
+    const reading=Number(r.reading).toLocaleString(undefined,{maximumFractionDigits:3});
+    html+='<div class="entry-row" id="entry-view-'+id+'"><div class="entry-details"><div class="entry-reading">'+reading+' kWh</div><div class="entry-timestamp">'+escapeEntryText(formatEntryTimestamp(r.ts))+'</div>'+(r.notes?'<div class="reading-meter">'+escapeEntryText(r.notes)+'</div>':'')+'</div><div class="entry-actions"><button class="entry-icon" aria-label="Edit entry" title="Edit entry" onclick="beginEntryEdit('+id+')">✎</button><button class="entry-icon danger" aria-label="Delete entry" title="Delete entry" onclick="deleteReading('+id+')">×</button></div></div>';
+    html+='<div class="entry-edit" id="entry-edit-'+id+'" hidden><input class="form-input small" type="date" id="entry-date-'+id+'" value="'+escapeEntryText(date)+'" aria-label="Reading date"><input class="form-input small" type="time" id="entry-time-'+id+'" value="'+escapeEntryText(time)+'" aria-label="Reading time"><input class="form-input small" type="number" step="0.001" min="0" id="entry-reading-'+id+'" value="'+escapeEntryText(r.reading)+'" aria-label="Reading in kWh"><button class="entry-action" onclick="saveEntryEdit('+id+')">Save</button><button class="entry-action" onclick="renderEntries()">Cancel</button></div>';
+  });
+  el.innerHTML=html;
+}
+function beginEntryEdit(id) {
+  const form=document.getElementById('entry-edit-'+id); if(form){document.getElementById('entry-view-'+id).hidden=true;form.hidden=false;document.getElementById('entry-reading-'+id)?.focus();}
+}
+function saveEntryEdit(id) {
+  const index=readings.findIndex(r=>String(r.id)===String(id)); if(index<0)return;
+  const date=document.getElementById('entry-date-'+id).value;
+  const time=document.getElementById('entry-time-'+id).value||'12:00';
+  const value=parseFloat(document.getElementById('entry-reading-'+id).value);
+  if(!date){toast('Pick a date','#ef4444');return;}
+  if(!Number.isFinite(value)||value<0){toast('Enter a valid reading','#ef4444');return;}
+  readings[index].ts=date+'T'+time; readings[index].reading=value;
+  persistData();
+  renderEntries();renderHistory();renderSummary();renderChart();renderStats();updateCount();
+  toast('Reading updated ✓');
+}
+
+function deleteReading(id) {
+  if (!confirm('Delete this reading?')) return;
+  readings = readings.filter(r => r.id !== id);
+  persistData();
+  renderHistory(); renderEntries(); renderSummary(); renderChart(); renderStats(); updateCount();
+}
+
+// ── ECAS IMPORT ────────────────────────────────────────────────────────
+function importECASData() {
+  if (readings.length > 0) {
+    if (!confirm(`You already have ${readings.length} readings. Merge with ECAS data?`)) return;
+  }
+  const existing = new Set(readings.map(r => r.ts));
+  let added = 0;
+  ECAS_IMPORT.readings.forEach(r => {
+    if (!existing.has(r.ts)) { readings.push(r); added++; }
+  });
+  // Apply ECAS settings
+  settings.rate     = ECAS_IMPORT.settings.rate;
+  settings.standing = ECAS_IMPORT.settings.standing;
+  settings.currency = ECAS_IMPORT.settings.currency;
+  persistData();
+  loadSettings();
+  renderSummary(); renderChart(); renderStats(); renderHistory(); updateCount();
+  toast(`Imported ${added} readings ✓`);
+}
+
+// ── RECONCILED CSV IMPORT ──────────────────────────────────────────────
+function parseCSV(text) {
+  const rows=[]; let row=[], field='', quoted=false;
+  for (let i=0;i<text.length;i++) {
+    const ch=text[i];
+    if (quoted && ch==='"' && text[i+1]==='"') { field+='"'; i++; }
+    else if (ch==='"') quoted=!quoted;
+    else if (ch===',' && !quoted) { row.push(field); field=''; }
+    else if ((ch==='\n'||ch==='\r') && !quoted) { if(ch==='\r'&&text[i+1]==='\n')i++; row.push(field); if(row.some(v=>v.trim()))rows.push(row); row=[]; field=''; }
+    else field+=ch;
+  }
+  if(field.length||row.length){row.push(field);rows.push(row);}
+  return rows;
+}
+async function handleCSVFile(input) {
+  const file=input.files&&input.files[0]; if(!file)return;
+  try {
+    const rows=parseCSV(await file.text());
+    const headers=rows.shift().map(v=>v.trim().toLowerCase());
+    const dateCol=headers.indexOf('date'), timeCol=headers.indexOf('time'), readingCol=headers.indexOf('reading (kwh)'), notesCol=headers.indexOf('notes');
+    if(dateCol<0||readingCol<0)throw new Error('CSV must include Date and Reading (kWh) columns.');
+    const imported=rows.map((row,i)=>{
+      const date=(row[dateCol]||'').trim(), time=timeCol>=0?(row[timeCol]||'').trim():'12:00', value=Number((row[readingCol]||'').trim());
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value)||value<0)throw new Error('Invalid date or reading on CSV row '+(i+2)+'.');
+      return {id:Date.now()+i,ts:date+'T'+(time||'12:00'),reading:value,notes:notesCol>=0?(row[notesCol]||'').trim():''};
+    });
+    if(!imported.length)throw new Error('No readings were found in this CSV.');
+    if(!confirm('Replace your current '+readings.length+' reading(s) with '+imported.length+' reconciled reading(s)? Export your current data first if you want a backup.'))return;
+    readings=imported.sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+    persistData();
+    renderSummary();renderChart();renderStats();renderHistory();renderEntries();updateCount();
+    toast('Imported '+readings.length+' readings ✓');
+  } catch(err) { toast(err.message||'Could not import this CSV.','#ef4444'); }
+  finally { input.value=''; }
+}
+
+// ── EXPORT CSV ─────────────────────────────────────────────────────────
+function exportCSV() {
+  if (!readings.length) { toast('No data to export','#ef4444'); return; }
+  const sorted = [...readings].sort((a,b) => new Date(a.ts)-new Date(b.ts));
+  let csv = 'Date,Time,Reading (kWh),Usage Since Last,Notes\n';
+  sorted.forEach((r,i) => {
+    const prev  = sorted[i-1];
+    const usage = prev ? (r.reading-prev.reading).toFixed(1) : '';
+    const [d,t] = r.ts.split('T');
+    csv += `${d},${t||''},${r.reading},${usage},"${r.notes||''}"\n`;
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'powerlog-readings.csv'; a.click();
+}
+
+// ── HELPERS ────────────────────────────────────────────────────────────
+function fmt(ts) {
+  return new Date(ts).toLocaleDateString('default',{day:'numeric',month:'short',year:'numeric'});
+}
+function toast(msg='Saved!', color='#10b981') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.background = color;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2400);
+}
+function updateCount() {
+  document.getElementById('total-count').textContent = readings.length + ' entries';
+}
+function clearData() {
+  if (!confirm('Delete ALL readings? Cannot be undone.')) return;
+  readings = [];
+  persistData();
+  renderSummary(); renderChart(); renderHistory(); renderEntries(); renderStats(); updateCount();
+}
+function installApp() {
+  if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.then(r => { deferredPrompt=null; if(r.outcome==='accepted') hideBanner(); }); }
+}
+function hideBanner() {
+  document.getElementById('install-banner').style.display='none';
+  localStorage.setItem('pl_banner_dismissed','1');
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
