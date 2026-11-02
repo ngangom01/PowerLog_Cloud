@@ -1,4 +1,4 @@
-const CACHE = 'powerlog-v6';
+const CACHE = 'powerlog-v7';
 const ASSETS = [
   './index.html',
   './manifest.json',

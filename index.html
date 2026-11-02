@@ -459,6 +459,7 @@ const ECAS_IMPORT = {"readings":[{"id":4000,"ts":"2022-11-29T12:26:00","reading"
 
 // ── STATE ──────────────────────────────────────────────────────────────
 let readings = JSON.parse(localStorage.getItem('pl_readings') || '[]');
+let deletedReadingIds = JSON.parse(localStorage.getItem('pl_deleted_readings') || '[]').map(String);
 let settings = JSON.parse(localStorage.getItem('pl_settings') || '{}');
 settings = { rate: 0.28, standing: 0.45, currency: '$', ...settings };
 let tariffs = JSON.parse(localStorage.getItem('pl_tariffs') || 'null');
@@ -573,16 +574,17 @@ function csvEscape(value) { const s=String(value??'');return /[",\r\n]/.test(s)?
 function serializeDriveCSV() {
   const rows=[['type','id','date','time','reading_kwh','notes','unit_rate','standing_charge','effective_start','effective_end','currency']];
   readings.forEach(r=>{const [date,time='12:00']=String(r.ts||'').split('T');rows.push(['reading',r.id,date,time,r.reading,r.notes||'','','','','','']);});
+  deletedReadingIds.forEach(id=>rows.push(['deleted',id,'','','','','','','','','']));
   tariffs.forEach(t=>rows.push(['tariff',t.id,'','','','',t.rate,t.standing,t.start,t.end||'','']));
   rows.push(['settings','','','','','','','','','',settings.currency||'']);
   return rows.map(row=>row.map(csvEscape).join(',')).join('\r\n')+'\r\n';
 }
-function applyDriveCSV(csv) {
+function parseDriveCSV(csv) {
   const rows=parseCSV(csv); if(!rows.length)throw new Error('The Drive CSV is empty.');
   const headers=rows.shift().map(v=>v.trim().toLowerCase());
   const col=name=>headers.indexOf(name);
   if(col('type')<0||col('reading_kwh')<0||col('unit_rate')<0)throw new Error('This is not a PowerLog data file.');
-  const nextReadings=[],nextTariffs=[];let nextCurrency=settings.currency;
+  const nextReadings=[],nextTariffs=[],nextDeleted=[];let nextCurrency=settings.currency;
   rows.forEach((row,i)=>{
     const type=row[col('type')];
     if(type==='reading'){
@@ -594,11 +596,17 @@ function applyDriveCSV(csv) {
       const rate=Number(row[col('unit_rate')]),standing=Number(row[col('standing_charge')]);
       if(!start||!Number.isFinite(rate)||!Number.isFinite(standing))throw new Error('Invalid tariff on CSV row '+(i+2)+'.');
       nextTariffs.push({id:Number(row[col('id')])||Date.now()+i,rate,standing,start,end});
-    } else if(type==='settings')nextCurrency=row[col('currency')]||nextCurrency;
+    } else if(type==='deleted')nextDeleted.push(String(row[col('id')]||''));
+    else if(type==='settings')nextCurrency=row[col('currency')]||nextCurrency;
   });
   if(!nextTariffs.length)throw new Error('The Drive CSV contains no tariffs.');
-  readings=nextReadings;tariffs=nextTariffs;settings.currency=nextCurrency;
-  localStorage.setItem('pl_readings',JSON.stringify(readings));localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));localStorage.setItem('pl_settings',JSON.stringify(settings));
+  const deletedIds=[...new Set(nextDeleted.filter(Boolean))];
+  return {readings:nextReadings.filter(r=>!deletedIds.includes(String(r.id))),tariffs:nextTariffs,currency:nextCurrency,deletedIds};
+}
+function applyDriveCSV(csv) {
+  const data=parseDriveCSV(csv);
+  readings=data.readings;tariffs=data.tariffs;settings.currency=data.currency;deletedReadingIds=data.deletedIds;
+  localStorage.setItem('pl_readings',JSON.stringify(readings));localStorage.setItem('pl_deleted_readings',JSON.stringify(deletedReadingIds));localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));localStorage.setItem('pl_settings',JSON.stringify(settings));
   loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderEntries();renderStats();updateCount();
 }
 async function uploadDriveCSV(csv) {
@@ -607,6 +615,16 @@ async function uploadDriveCSV(csv) {
   await driveRequest('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(driveFileId)+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'text/csv'},body:csv});
   setDriveStatus('Connected · synced with Google Drive');
 }
+async function fetchDriveCSV() {
+  if(!driveFileId){
+    const q="appProperties has { key='powerlog' and value='true' } and trashed = false";
+    const list=await driveRequest('https://www.googleapis.com/drive/v3/files?spaces=drive&pageSize=10&fields=files(id,name)&q='+encodeURIComponent(q));
+    driveFileId=((await list.json()).files||[])[0]?.id||null;
+  }
+  if(!driveFileId)return null;
+  const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(driveFileId)+'?alt=media');
+  return response.text();
+}
 async function loadOrCreateDriveFile() {
   const q="appProperties has { key='powerlog' and value='true' } and trashed = false";
   const list=await driveRequest('https://www.googleapis.com/drive/v3/files?spaces=drive&pageSize=10&fields=files(id,name)&q='+encodeURIComponent(q));
@@ -614,10 +632,16 @@ async function loadOrCreateDriveFile() {
   if(files.length){driveFileId=files[0].id;driveLoading=true;try{
     const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(driveFileId)+'?alt=media');
     const csv=await response.text();
-    if(readings.length&&!confirm('PowerLog.csv already exists. Press OK to load Drive and replace this browser’s readings and tariffs. Press Cancel to keep this browser’s data and upload it to Drive instead, replacing the Drive file. Export a backup first if needed.')){
-      await uploadDriveCSV(serializeDriveCSV());driveDirty=false;return true;
-    }
-    applyDriveCSV(csv);
+    if(readings.length){
+      const remote=parseDriveCSV(csv);deletedReadingIds=[...new Set([...remote.deletedIds,...deletedReadingIds])];
+      const deleted=new Set(deletedReadingIds),merged=new Map(remote.readings.filter(r=>!deleted.has(String(r.id))).map(r=>[String(r.id),r]));
+      readings.forEach(r=>{if(!deleted.has(String(r.id))&&!merged.has(String(r.id)))merged.set(String(r.id),r);});
+      readings=[...merged.values()].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+      tariffs=remote.tariffs;settings.currency=remote.currency;
+      localStorage.setItem('pl_readings',JSON.stringify(readings));localStorage.setItem('pl_deleted_readings',JSON.stringify(deletedReadingIds));localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));localStorage.setItem('pl_settings',JSON.stringify(settings));
+      loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderEntries();renderStats();updateCount();
+      driveDirty=true;driveEditVersion++;await uploadDriveCSV(serializeDriveCSV());
+    } else applyDriveCSV(csv);
     driveDirty=false;
   }finally{driveLoading=false;}return true;
   }
@@ -629,6 +653,7 @@ async function loadOrCreateDriveFile() {
 }
 function persistData() {
   localStorage.setItem('pl_readings',JSON.stringify(readings));
+  localStorage.setItem('pl_deleted_readings',JSON.stringify(deletedReadingIds));
   localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));
   localStorage.setItem('pl_settings',JSON.stringify(settings));
   if(!driveAccessToken||driveLoading)return;
@@ -643,8 +668,22 @@ async function syncDriveNow() {
   if(!driveAccessToken){toast('Connect Google Drive first','#ef4444');return;}
   try{
     clearTimeout(driveSaveTimer);driveSaveTimer=null;
-    if(driveDirty){const version=driveEditVersion,snapshot=serializeDriveCSV();driveSaveQueue=driveSaveQueue.then(async()=>{await uploadDriveCSV(snapshot);if(version===driveEditVersion)driveDirty=false;});await driveSaveQueue;setDriveStatus('Connected · synced with Google Drive');toast('Local changes uploaded ✓');return;}
-    await driveSaveQueue;const loaded=await loadOrCreateDriveFile();if(!loaded){setDriveStatus('Sync canceled · local data kept');return;}setDriveStatus('Connected · synced with Google Drive');toast('Google Drive synced ✓');
+    await driveSaveQueue;
+    const csv=await fetchDriveCSV();
+    if(!csv){await loadOrCreateDriveFile();setDriveStatus('Connected · synced with Google Drive');return;}
+    const remote=parseDriveCSV(csv),localDirty=driveDirty;
+    deletedReadingIds=[...new Set([...remote.deletedIds,...deletedReadingIds])];const deleted=new Set(deletedReadingIds);
+    const merged=new Map(remote.readings.filter(r=>!deleted.has(String(r.id))).map(r=>[String(r.id),r]));
+    readings.forEach(r=>{const key=String(r.id);if(!deleted.has(key)&&(!merged.has(key)||localDirty))merged.set(key,r);});
+    readings=[...merged.values()].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+    if(localDirty){
+      const byId=new Map(remote.tariffs.map(t=>[String(t.id),t]));tariffs.forEach(t=>byId.set(String(t.id),t));tariffs=[...byId.values()].sort((a,b)=>a.start.localeCompare(b.start));
+    } else tariffs=remote.tariffs;
+    if(!localDirty)settings.currency=remote.currency;
+    localStorage.setItem('pl_readings',JSON.stringify(readings));localStorage.setItem('pl_deleted_readings',JSON.stringify(deletedReadingIds));localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));localStorage.setItem('pl_settings',JSON.stringify(settings));
+    loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderEntries();renderStats();updateCount();
+    driveDirty=true;driveEditVersion++;await uploadDriveCSV(serializeDriveCSV());driveDirty=false;
+    setDriveStatus('Connected · synced with Google Drive');toast('Google Drive synced ✓');
   }
   catch(error){setDriveStatus(error.message||'Drive sync failed',true);}
 }
@@ -986,6 +1025,7 @@ function saveEntryEdit(id) {
 
 function deleteReading(id) {
   if (!confirm('Delete this reading?')) return;
+  deletedReadingIds=[...new Set([...deletedReadingIds,String(id)])];
   readings = readings.filter(r => r.id !== id);
   persistData();
   renderHistory(); renderEntries(); renderSummary(); renderChart(); renderStats(); updateCount();
@@ -1039,6 +1079,7 @@ async function handleCSVFile(input) {
     });
     if(!imported.length)throw new Error('No readings were found in this CSV.');
     if(!confirm('Replace your current '+readings.length+' reading(s) with '+imported.length+' reconciled reading(s)? Export your current data first if you want a backup.'))return;
+    deletedReadingIds=[...new Set([...deletedReadingIds,...readings.map(r=>String(r.id))])];
     readings=imported.sort((a,b)=>new Date(a.ts)-new Date(b.ts));
     persistData();
     renderSummary();renderChart();renderStats();renderHistory();renderEntries();updateCount();
@@ -1078,6 +1119,7 @@ function updateCount() {
 }
 function clearData() {
   if (!confirm('Delete ALL readings? Cannot be undone.')) return;
+  deletedReadingIds=[...new Set([...deletedReadingIds,...readings.map(r=>String(r.id))])];
   readings = [];
   persistData();
   renderSummary(); renderChart(); renderHistory(); renderEntries(); renderStats(); updateCount();
