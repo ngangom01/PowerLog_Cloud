@@ -283,6 +283,30 @@
   }
   @media (min-width: 601px) and (max-width: 900px) { .page { max-width:760px; padding:18px; } }
 
+
+  /* ── Entries: sleek read-only rows, fields activate on Edit ── */
+  .er{display:flex;align-items:center;gap:8px;padding:12px 2px;border-bottom:1px solid var(--border)}
+  .er:last-child{border-bottom:0}
+  .er-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .er-top{display:flex;align-items:baseline;gap:6px}
+  .er-unit{font-size:12px;color:var(--text-2)}
+  .er-meta{display:flex;gap:6px;flex-wrap:nowrap}
+  .er-in{font-family:inherit;background:transparent;color:var(--text-1);-webkit-text-fill-color:var(--text-1);opacity:1;border:1px solid transparent;border-radius:8px;padding:1px 0;min-width:0;outline:none;-webkit-appearance:none;appearance:none}
+  .er-in:disabled{pointer-events:none}
+  .er-in:disabled::-webkit-calendar-picker-indicator{display:none}
+  .er-reading{font-size:20px;font-weight:700;width:8ch;max-width:100%;-moz-appearance:textfield}
+  .er-reading::-webkit-inner-spin-button,.er-reading::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  .er-meta .er-in{font-size:13px;color:var(--text-2);-webkit-text-fill-color:var(--text-2);width:auto}
+  .er-notes{font-size:13px;color:var(--text-2);-webkit-text-fill-color:var(--text-2);width:100%}
+  .er:not(.editing) .er-notes[data-empty]{display:none}
+  .er.editing{background:var(--bg-raised);border-radius:12px;padding:12px 10px;margin:4px 0}
+  .er.editing .er-in{background:var(--bg-card);border-color:var(--border);padding:7px 9px;color:var(--text-1);-webkit-text-fill-color:var(--text-1)}
+  .er.editing .er-reading{font-size:18px;width:11ch}
+  .er.editing .er-meta .er-in{flex:1 1 0;width:0;font-size:14px}
+  .er-actions{display:flex;gap:2px;flex-shrink:0}
+  .er-btn{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;background:transparent;color:var(--text-2);border:0;border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .er-btn:active{background:var(--bg-raised)}
+  .er-btn.danger{color:var(--red)} .er-btn.ok{color:var(--green)}
 </style>
 </head>
 <body>
@@ -485,7 +509,7 @@ window.addEventListener('load', () => {
   document.getElementById('input-time').value = now.toTimeString().slice(0,5);
   loadSettings();
   document.getElementById('google-client-id').value=settings.googleClientId||'';
-  setDriveStatus('Not connected');
+  initDrive();
   renderTariffs();
   renderSummary();
   renderChart();
@@ -534,6 +558,7 @@ function saveSetting(key) {
   const map = { rate:'setting-rate', standing:'setting-standing', currency:'setting-currency' };
   const val = document.getElementById(map[key]).value;
   settings[key] = key === 'currency' ? val : parseFloat(val) || 0;
+  if(key==='currency')settings.currencyU=Date.now();
   persistData();
   renderTariffs(); renderSummary(); renderChart(); renderStats();
 }
@@ -541,151 +566,181 @@ function saveSetting(key) {
 // ── GOOGLE DRIVE DATA SOURCE ──────────────────────────────────────────
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const DRIVE_FILE_NAME='PowerLog.csv';
-function setDriveStatus(message,isError=false) {
-  const el=document.getElementById('drive-status'); if(!el)return;
-  el.textContent=message; el.style.color=isError?'var(--red)':'';
-  const sync=document.getElementById('drive-sync-now'); if(sync)sync.hidden=!driveAccessToken;
+const DRIVE_QUERY="appProperties has { key='powerlog' and value='true' } and trashed = false";
+let driveQueue=Promise.resolve(), driveSyncTimer=null, driveLastAuto=0;
+function driveConnected(){return localStorage.getItem('pl_drive_connected')==='1';}
+function loadDriveToken(){try{const t=JSON.parse(localStorage.getItem('pl_drive_token')||'null');if(t&&t.token&&t.exp>Date.now()+120000)driveAccessToken=t.token;}catch{}}
+function saveDriveToken(token,expiresIn){driveAccessToken=token;localStorage.setItem('pl_drive_token',JSON.stringify({token,exp:Date.now()+(Number(expiresIn)||3600)*1000}));}
+function clearDriveToken(){driveAccessToken=null;localStorage.removeItem('pl_drive_token');}
+function setDriveStatus(message,isError=false){
+  const el=document.getElementById('drive-status'); if(el){el.textContent=message; el.style.color=isError?'var(--red)':'';}
+  const sync=document.getElementById('drive-sync-now'); if(sync)sync.hidden=!driveConnected();
 }
-function saveGoogleClientId() {
+function saveGoogleClientId(){
   const id=document.getElementById('google-client-id').value.trim();
   if(!id){toast('Enter a Google OAuth Client ID','#ef4444');return;}
   settings.googleClientId=id;localStorage.setItem('pl_settings',JSON.stringify(settings));
   toast('Client ID saved ✓');
 }
-function connectGoogleDrive() {
+function requestDriveToken(prompt){
+  return new Promise((resolve,reject)=>{
+    const id=(settings.googleClientId||document.getElementById('google-client-id').value||'').trim();
+    if(!id)return reject(new Error('Enter your Google OAuth Client ID'));
+    if(!window.google?.accounts?.oauth2)return reject(new Error('Google sign-in did not load. Check your connection and reload.'));
+    const client=google.accounts.oauth2.initTokenClient({client_id:id,scope:DRIVE_SCOPE,
+      callback:r=>{if(r.error||!r.access_token)reject(new Error('Google sign-in failed: '+(r.error_description||r.error||'no access token')));else{saveDriveToken(r.access_token,r.expires_in);resolve(r.access_token);}},
+      error_callback:e=>reject(new Error('Google sign-in '+(e&&e.type?e.type.replace(/_/g,' '):'canceled')))});
+    client.requestAccessToken({prompt});
+  });
+}
+async function connectGoogleDrive(){
   const id=document.getElementById('google-client-id').value.trim();
   if(!id){toast('Enter your Google OAuth Client ID','#ef4444');return;}
   settings.googleClientId=id;localStorage.setItem('pl_settings',JSON.stringify(settings));
-  if(!window.google?.accounts?.oauth2){setDriveStatus('Google sign-in did not load. Check your connection and reload.',true);return;}
-  const client=google.accounts.oauth2.initTokenClient({client_id:id,scope:DRIVE_SCOPE,callback:async response=>{
-    if(response.error||!response.access_token){setDriveStatus('Google sign-in failed: '+(response.error_description||response.error||'no access token'),true);return;}
-    driveAccessToken=response.access_token;setDriveStatus('Connecting to Drive…');
-    try{const loaded=await loadOrCreateDriveFile();if(!loaded){driveAccessToken=null;setDriveStatus('Connection canceled · local data kept');return;}setDriveStatus('Connected · synced with Google Drive');toast('Google Drive connected ✓');}
-    catch(error){driveAccessToken=null;setDriveStatus(error.message||'Could not connect to Google Drive',true);}
-  }});
-  client.requestAccessToken({prompt:''});
+  try{
+    setDriveStatus('Waiting for Google sign-in…');
+    await requestDriveToken('');
+    localStorage.setItem('pl_drive_connected','1');
+    await runSync(true);
+  }catch(e){setDriveStatus(e.message||'Could not connect to Google Drive',true);}
 }
-async function driveRequest(url,options={}) {
-  const response=await fetch(url,{...options,headers:{Authorization:'Bearer '+driveAccessToken,...(options.headers||{})}});
-  if(!response.ok){let detail='';try{detail=(await response.json()).error?.message||'';}catch{};if(response.status===401)driveAccessToken=null;throw new Error(detail||('Google Drive request failed ('+response.status+')'));}
+// no-store + token refresh on 401. Never let the browser or service worker answer from a cache.
+async function driveRequest(url,options={},retry=true){
+  const response=await fetch(url,{...options,cache:'no-store',headers:{Authorization:'Bearer '+driveAccessToken,...(options.headers||{})}});
+  if(response.status===401){clearDriveToken();if(retry){await requestDriveToken('');return driveRequest(url,options,false);}throw new Error('Google session expired · tap Sync now');}
+  if(!response.ok){let detail='';try{detail=(await response.json()).error?.message||'';}catch{}throw new Error(detail||('Google Drive request failed ('+response.status+')'));}
   return response;
 }
-function csvEscape(value) { const s=String(value??'');return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
-function serializeDriveCSV() {
-  const rows=[['type','id','date','time','reading_kwh','notes','unit_rate','standing_charge','effective_start','effective_end','currency']];
-  readings.forEach(r=>{const [date,time='12:00']=String(r.ts||'').split('T');rows.push(['reading',r.id,date,time,r.reading,r.notes||'','','','','','']);});
-  deletedReadingIds.forEach(id=>rows.push(['deleted',id,'','','','','','','','','']));
-  tariffs.forEach(t=>rows.push(['tariff',t.id,'','','','',t.rate,t.standing,t.start,t.end||'','']));
-  rows.push(['settings','','','','','','','','','',settings.currency||'']);
+function csvEscape(value){const s=String(value??'');return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function serializeDriveCSV(){
+  const rows=[['type','id','date','time','reading_kwh','notes','unit_rate','standing_charge','effective_start','effective_end','currency','updated_at']];
+  [...readings].sort((a,b)=>String(a.ts).localeCompare(String(b.ts))||Number(a.id)-Number(b.id)).forEach(r=>{const [date,time='12:00']=String(r.ts||'').split('T');rows.push(['reading',r.id,date,time,r.reading,r.notes||'','','','','','',r.u||0]);});
+  [...deletedReadingIds].map(String).sort().forEach(id=>rows.push(['deleted',id,'','','','','','','','','','']));
+  [...tariffs].sort((a,b)=>a.start.localeCompare(b.start)).forEach(t=>rows.push(['tariff',t.id,'','','','',t.rate,t.standing,t.start,t.end||'','',t.u||0]));
+  rows.push(['settings','','','','','','','','','',settings.currency||'',settings.currencyU||0]);
   return rows.map(row=>row.map(csvEscape).join(',')).join('\r\n')+'\r\n';
 }
-function parseDriveCSV(csv) {
+function parseDriveCSV(csv){
   const rows=parseCSV(csv); if(!rows.length)throw new Error('The Drive CSV is empty.');
   const headers=rows.shift().map(v=>v.trim().toLowerCase());
   const col=name=>headers.indexOf(name);
   if(col('type')<0||col('reading_kwh')<0||col('unit_rate')<0)throw new Error('This is not a PowerLog data file.');
-  const nextReadings=[],nextTariffs=[],nextDeleted=[];let nextCurrency=settings.currency;
+  const upd=row=>col('updated_at')>=0?(Number(row[col('updated_at')])||0):0;
+  const out={readings:[],tariffs:[],deletedIds:[],currency:'',currencyU:0};
   rows.forEach((row,i)=>{
-    const type=row[col('type')];
+    const type=(row[col('type')]||'').trim();
     if(type==='reading'){
       const date=(row[col('date')]||'').trim(),time=(row[col('time')]||'12:00').trim(),value=Number(row[col('reading_kwh')]);
       if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value))throw new Error('Invalid reading on CSV row '+(i+2)+'.');
-      nextReadings.push({id:Number(row[col('id')])||Date.now()+i,ts:date+'T'+(time||'12:00'),reading:value,notes:row[col('notes')]||''});
-    } else if(type==='tariff'){
+      out.readings.push({id:Number(row[col('id')])||Date.now()+i,ts:date+'T'+(time||'12:00'),reading:value,notes:row[col('notes')]||'',u:upd(row)});
+    }else if(type==='tariff'){
       const start=(row[col('effective_start')]||'').trim(),end=(row[col('effective_end')]||'').trim();
       const rate=Number(row[col('unit_rate')]),standing=Number(row[col('standing_charge')]);
       if(!start||!Number.isFinite(rate)||!Number.isFinite(standing))throw new Error('Invalid tariff on CSV row '+(i+2)+'.');
-      nextTariffs.push({id:Number(row[col('id')])||Date.now()+i,rate,standing,start,end});
-    } else if(type==='deleted')nextDeleted.push(String(row[col('id')]||''));
-    else if(type==='settings')nextCurrency=row[col('currency')]||nextCurrency;
+      out.tariffs.push({id:Number(row[col('id')])||Date.now()+i,rate,standing,start,end,u:upd(row)});
+    }else if(type==='deleted'){const id=String(row[col('id')]||'').trim();if(id)out.deletedIds.push(id);}
+    else if(type==='settings'){out.currency=(row[col('currency')]||'').trim();out.currencyU=upd(row);}
   });
-  if(!nextTariffs.length)throw new Error('The Drive CSV contains no tariffs.');
-  const deletedIds=[...new Set(nextDeleted.filter(Boolean))];
-  return {readings:nextReadings.filter(r=>!deletedIds.includes(String(r.id))),tariffs:nextTariffs,currency:nextCurrency,deletedIds};
+  out.deletedIds=[...new Set(out.deletedIds)];
+  return out;
 }
-function applyDriveCSV(csv) {
-  const data=parseDriveCSV(csv);
-  readings=data.readings;tariffs=data.tariffs;settings.currency=data.currency;deletedReadingIds=data.deletedIds;
-  localStorage.setItem('pl_readings',JSON.stringify(readings));localStorage.setItem('pl_deleted_readings',JSON.stringify(deletedReadingIds));localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));localStorage.setItem('pl_settings',JSON.stringify(settings));
-  loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderEntries();renderStats();updateCount();
-}
-async function uploadDriveCSV(csv) {
-  if(!driveAccessToken)return;
-  setDriveStatus('Syncing to Google Drive…');
-  await driveRequest('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(driveFileId)+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'text/csv'},body:csv});
-  setDriveStatus('Connected · synced with Google Drive');
-}
-async function fetchDriveCSV() {
-  if(!driveFileId){
-    const q="appProperties has { key='powerlog' and value='true' } and trashed = false";
-    const list=await driveRequest('https://www.googleapis.com/drive/v3/files?spaces=drive&pageSize=10&fields=files(id,name)&q='+encodeURIComponent(q));
-    driveFileId=((await list.json()).files||[])[0]?.id||null;
+// Merge a remote snapshot INTO local state. Per-record newest edit wins; deletions (tombstones) win over edits.
+function mergeRemote(remote){
+  const tomb=new Set([...deletedReadingIds,...remote.deletedIds].map(String));
+  const newer=(local,rem)=>!local?rem:!rem?local:((Number(rem.u)||0)>(Number(local.u)||0)?rem:local);
+  const rm=new Map(remote.readings.map(r=>[String(r.id),r]));
+  readings.forEach(r=>rm.set(String(r.id),newer(r,rm.get(String(r.id)))));
+  const seen=new Set(),out=[];
+  [...rm.values()].filter(r=>!tomb.has(String(r.id))).sort((a,b)=>Number(a.id)-Number(b.id)).forEach(r=>{
+    const key=String(r.ts).slice(0,16)+'|'+r.reading;   // same reading imported on two devices -> keep one
+    if(seen.has(key)){tomb.add(String(r.id));return;}
+    seen.add(key);out.push(r);
+  });
+  readings=out.sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  const localIsPlaceholder=tariffs.length===1&&tariffs[0].start==='0001-01-01'&&!tariffs[0].u;
+  if(localIsPlaceholder&&remote.tariffs.length){tariffs=[...remote.tariffs];}
+  else{
+    const tm=new Map(remote.tariffs.map(t=>[String(t.id),t]));
+    tariffs.forEach(t=>tm.set(String(t.id),newer(t,tm.get(String(t.id)))));
+    const nt=[...tm.values()].filter(t=>!tomb.has('tariff:'+t.id));
+    if(nt.length)tariffs=nt;
   }
-  if(!driveFileId)return null;
-  const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(driveFileId)+'?alt=media');
-  return response.text();
+  tariffs.sort((a,b)=>a.start.localeCompare(b.start));
+  if(remote.currency&&((remote.currencyU||0)>(settings.currencyU||0)||!settings.currencyU)){settings.currency=remote.currency;settings.currencyU=remote.currencyU||0;}
+  deletedReadingIds=[...tomb];
 }
-async function loadOrCreateDriveFile() {
-  const q="appProperties has { key='powerlog' and value='true' } and trashed = false";
-  const list=await driveRequest('https://www.googleapis.com/drive/v3/files?spaces=drive&pageSize=10&fields=files(id,name)&q='+encodeURIComponent(q));
-  const files=(await list.json()).files||[];
-  if(files.length){driveFileId=files[0].id;driveLoading=true;try{
-    const response=await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(driveFileId)+'?alt=media');
-    const csv=await response.text();
-    if(readings.length){
-      const remote=parseDriveCSV(csv);deletedReadingIds=[...new Set([...remote.deletedIds,...deletedReadingIds])];
-      const deleted=new Set(deletedReadingIds),merged=new Map(remote.readings.filter(r=>!deleted.has(String(r.id))).map(r=>[String(r.id),r]));
-      readings.forEach(r=>{if(!deleted.has(String(r.id))&&!merged.has(String(r.id)))merged.set(String(r.id),r);});
-      readings=[...merged.values()].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
-      tariffs=remote.tariffs;settings.currency=remote.currency;
-      localStorage.setItem('pl_readings',JSON.stringify(readings));localStorage.setItem('pl_deleted_readings',JSON.stringify(deletedReadingIds));localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));localStorage.setItem('pl_settings',JSON.stringify(settings));
-      loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderEntries();renderStats();updateCount();
-      driveDirty=true;driveEditVersion++;await uploadDriveCSV(serializeDriveCSV());
-    } else applyDriveCSV(csv);
-    driveDirty=false;
-  }finally{driveLoading=false;}return true;
-  }
-  const created=await driveRequest('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FILE_NAME,mimeType:'text/csv',appProperties:{powerlog:'true'}})});
-  driveFileId=(await created.json()).id;
-  await uploadDriveCSV(serializeDriveCSV());
-  driveDirty=false;
-  return true;
-}
-function persistData() {
+function persistLocal(){
   localStorage.setItem('pl_readings',JSON.stringify(readings));
   localStorage.setItem('pl_deleted_readings',JSON.stringify(deletedReadingIds));
   localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));
   localStorage.setItem('pl_settings',JSON.stringify(settings));
-  if(!driveAccessToken||driveLoading)return;
-  driveDirty=true;driveEditVersion++;
-  clearTimeout(driveSaveTimer);
-  driveSaveTimer=setTimeout(()=>{
-    const snapshot=serializeDriveCSV(),version=driveEditVersion;
-    driveSaveQueue=driveSaveQueue.then(async()=>{await uploadDriveCSV(snapshot);if(version===driveEditVersion)driveDirty=false;}).catch(error=>setDriveStatus(error.message||'Drive sync failed',true));
-  },500);
 }
-async function syncDriveNow() {
-  if(!driveAccessToken){toast('Connect Google Drive first','#ef4444');return;}
-  try{
-    clearTimeout(driveSaveTimer);driveSaveTimer=null;
-    await driveSaveQueue;
-    const csv=await fetchDriveCSV();
-    if(!csv){await loadOrCreateDriveFile();setDriveStatus('Connected · synced with Google Drive');return;}
-    const remote=parseDriveCSV(csv),localDirty=driveDirty;
-    deletedReadingIds=[...new Set([...remote.deletedIds,...deletedReadingIds])];const deleted=new Set(deletedReadingIds);
-    const merged=new Map(remote.readings.filter(r=>!deleted.has(String(r.id))).map(r=>[String(r.id),r]));
-    readings.forEach(r=>{const key=String(r.id);if(!deleted.has(key)&&(!merged.has(key)||localDirty))merged.set(key,r);});
-    readings=[...merged.values()].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
-    if(localDirty){
-      const byId=new Map(remote.tariffs.map(t=>[String(t.id),t]));tariffs.forEach(t=>byId.set(String(t.id),t));tariffs=[...byId.values()].sort((a,b)=>a.start.localeCompare(b.start));
-    } else tariffs=remote.tariffs;
-    if(!localDirty)settings.currency=remote.currency;
-    localStorage.setItem('pl_readings',JSON.stringify(readings));localStorage.setItem('pl_deleted_readings',JSON.stringify(deletedReadingIds));localStorage.setItem('pl_tariffs',JSON.stringify(tariffs));localStorage.setItem('pl_settings',JSON.stringify(settings));
-    loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderEntries();renderStats();updateCount();
-    driveDirty=true;driveEditVersion++;await uploadDriveCSV(serializeDriveCSV());driveDirty=false;
-    setDriveStatus('Connected · synced with Google Drive');toast('Google Drive synced ✓');
+function refreshAll(){
+  loadSettings();renderTariffs();renderSummary();renderChart();renderHistory();renderStats();updateCount();
+  if(editingEntryId===null)renderEntries();
+}
+async function uploadDriveCSV(csv){
+  await driveRequest('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(driveFileId)+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'text/csv'},body:csv});
+}
+// Read -> merge -> write. Always pulls before pushing so one device never overwrites another's entries.
+async function syncCore(){
+  const listUrl='https://www.googleapis.com/drive/v3/files?spaces=drive&pageSize=20&orderBy=createdTime&fields=files(id,name,createdTime)&q='+encodeURIComponent(DRIVE_QUERY);
+  const files=(await (await driveRequest(listUrl)).json()).files||[];
+  if(!files.length){
+    const created=await driveRequest('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FILE_NAME,mimeType:'text/csv',appProperties:{powerlog:'true'}})});
+    driveFileId=(await created.json()).id;
+    await uploadDriveCSV(serializeDriveCSV());
+    return;
   }
-  catch(error){setDriveStatus(error.message||'Drive sync failed',true);}
+  driveFileId=files[0].id;            // oldest file is the canonical one on every device
+  let remoteText='';
+  for(let i=0;i<files.length;i++){    // any stray duplicate files are merged in too
+    const text=await (await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(files[i].id)+'?alt=media')).text();
+    if(i===0)remoteText=text;
+    if(!text.trim())continue;
+    try{mergeRemote(parseDriveCSV(text));}catch(e){if(i===0)throw e;}
+  }
+  persistLocal();refreshAll();
+  const merged=serializeDriveCSV();
+  if(merged!==remoteText)await uploadDriveCSV(merged);
+}
+function runSync(manual){
+  driveQueue=driveQueue.then(async()=>{
+    if(!driveConnected())return;
+    if(!driveAccessToken){setDriveStatus('Session expired · tap Sync now to reconnect',manual);return;}
+    try{
+      setDriveStatus('Syncing…');
+      await syncCore();
+      setDriveStatus('Connected · synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+      if(manual)toast('Google Drive synced ✓');
+    }catch(e){setDriveStatus(e.message||'Drive sync failed',true);if(manual)toast('Sync failed','#ef4444');}
+  });
+  return driveQueue;
+}
+function syncDriveNow(){
+  if(!driveConnected()){toast('Connect Google Drive first','#ef4444');return;}
+  const ready=driveAccessToken?Promise.resolve():requestDriveToken('');   // runs inside the tap, so the sign-in popup is allowed
+  return ready.then(()=>runSync(true)).catch(e=>setDriveStatus(e.message||'Sign-in failed',true));
+}
+function scheduleDriveSync(){
+  if(!driveConnected()||!driveAccessToken)return;
+  clearTimeout(driveSyncTimer);driveSyncTimer=setTimeout(()=>runSync(false),800);
+}
+function persistData(){persistLocal();scheduleDriveSync();}
+function autoPull(){
+  if(!driveConnected()||document.visibilityState==='hidden'||editingEntryId!==null)return;
+  if(Date.now()-driveLastAuto<15000)return;
+  driveLastAuto=Date.now();loadDriveToken();runSync(false);
+}
+function initDrive(){
+  loadDriveToken();
+  if(driveConnected()){
+    setDriveStatus(driveAccessToken?'Connected · syncing…':'Session expired · tap Sync now to reconnect');
+    if(driveAccessToken)runSync(false);
+  }else setDriveStatus('Not connected');
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoPull();});
+  window.addEventListener('focus',autoPull);
+  setInterval(autoPull,60000);
 }
 
 function renderTariffs() {
@@ -700,17 +755,17 @@ function addTariff() {
   if(!start){toast('Pick an effective start date','#ef4444');return;}
   if(end&&end<start){toast('End date must be on or after start date','#ef4444');return;}
   const adjusted=tariffs.map(t=>({...t}));
-  adjusted.forEach(t=>{if(t.start<start&&(!t.end||t.end>=start))t.end=previousDate(start);});
+  adjusted.forEach(t=>{if(t.start<start&&(!t.end||t.end>=start)){t.end=previousDate(start);t.u=Date.now();}});
   const overlaps=adjusted.some(t=>start<=(t.end||'9999-12-31')&&(!end||end>=t.start));
   if(overlaps){toast('Tariff dates overlap an existing tariff','#ef4444');return;}
-  tariffs=adjusted; tariffs.push({id:Date.now(),rate,standing,start,end}); persistData();
+  tariffs=adjusted; tariffs.push({id:Date.now(),rate,standing,start,end,u:Date.now()}); persistData();
   ['tariff-rate','tariff-standing','tariff-start','tariff-end'].forEach(id=>document.getElementById(id).value='');
   renderTariffs(); renderSummary(); renderChart(); renderStats(); toast('Tariff added ✓');
 }
 function deleteTariff(id) {
   if(tariffs.length<2){toast('Keep at least one tariff','#ef4444');return;}
   if(!confirm('Delete this tariff?'))return;
-  tariffs=tariffs.filter(t=>Number(t.id)!==Number(id));persistData();
+  tariffs=tariffs.filter(t=>Number(t.id)!==Number(id));deletedReadingIds=[...new Set([...deletedReadingIds,'tariff:'+id])];persistData();
   renderTariffs();renderSummary();renderChart();renderStats();
 }
 function tariffForDate(date) { return tariffs.find(t=>date>=t.start&&(!t.end||date<=t.end))||{rate:0,standing:0}; }
@@ -731,7 +786,7 @@ function saveReading() {
   if (last && val < last.reading) {
     if (!confirm(`Reading (${val}) is lower than last (${last.reading}). Continue?`)) return;
   }
-  readings.push({ id: Date.now(), ts: date+'T'+(time||'12:00'), reading: val, notes });
+  readings.push({ id: Date.now(), ts: date+'T'+(time||'12:00'), reading: val, notes, u: Date.now() });
   persistData();
   document.getElementById('input-reading').value = '';
   document.getElementById('input-notes').value   = '';
@@ -980,7 +1035,6 @@ function renderHistory() {
            ${r.notes?`<div class="reading-date">${r.notes}</div>`:''}
            ${reset?'<div class="reading-meter">New meter series</div>':(kwh!==null?`<div class="reading-meter">+${kwh.toFixed(1)} kWh since prev</div>`:'')}
       </div>
-      <button onclick="deleteReading(${r.id})" style="background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;padding:4px">✕</button>
     </div>`;
   });
   html += `</div>`;
@@ -994,30 +1048,45 @@ function formatEntryTimestamp(ts) {
   const d=new Date(ts);
   return d.toLocaleString('default',{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'});
 }
+let editingEntryId=null;
+const ICONS={
+  edit:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>',
+  del:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>',
+  ok:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
+  x:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>'
+};
+function entryViewButtons(id){return '<button class="er-btn" aria-label="Edit" title="Edit" onclick="beginEntryEdit('+id+')">'+ICONS.edit+'</button><button class="er-btn danger" aria-label="Delete" title="Delete" onclick="deleteReading('+id+')">'+ICONS.del+'</button>';}
 function renderEntries() {
   const el=document.getElementById('entries-list'); if(!el)return;
+  editingEntryId=null;
   if(!readings.length){el.innerHTML='<div class="empty"><div class="icon">📋</div><p>No readings yet.</p></div>';return;}
   const sorted=[...readings].sort((a,b)=>new Date(b.ts)-new Date(a.ts));
-  let html='';
-  sorted.forEach(r=>{
-    const id=String(r.id),parts=String(r.ts||'').split('T'),date=parts[0]||'',time=parts[1]||'12:00';
-    const reading=Number(r.reading).toLocaleString(undefined,{maximumFractionDigits:3});
-    html+='<div class="entry-row" id="entry-view-'+id+'"><div class="entry-details"><div class="entry-reading">'+reading+' kWh</div><div class="entry-timestamp">'+escapeEntryText(formatEntryTimestamp(r.ts))+'</div>'+(r.notes?'<div class="reading-meter">'+escapeEntryText(r.notes)+'</div>':'')+'</div><div class="entry-actions"><button class="entry-icon" aria-label="Edit entry" title="Edit entry" onclick="beginEntryEdit('+id+')">✎</button><button class="entry-icon danger" aria-label="Delete entry" title="Delete entry" onclick="deleteReading('+id+')">×</button></div></div>';
-    html+='<div class="entry-edit" id="entry-edit-'+id+'" hidden><input class="form-input small" type="date" id="entry-date-'+id+'" value="'+escapeEntryText(date)+'" aria-label="Reading date"><input class="form-input small" type="time" id="entry-time-'+id+'" value="'+escapeEntryText(time)+'" aria-label="Reading time"><input class="form-input small" type="number" step="0.001" min="0" id="entry-reading-'+id+'" value="'+escapeEntryText(r.reading)+'" aria-label="Reading in kWh"><button class="entry-action" onclick="saveEntryEdit('+id+')">Save</button><button class="entry-action" onclick="renderEntries()">Cancel</button></div>';
-  });
-  el.innerHTML=html;
+  el.innerHTML=sorted.map(r=>{
+    const id=String(r.id),parts=String(r.ts||'').split('T'),date=parts[0]||'',time=(parts[1]||'12:00').slice(0,5);
+    const key='onkeydown="if(event.key===\'Enter\')saveEntryEdit('+id+')"';
+    return '<div class="er" id="er-'+id+'"><div class="er-fields">'
+      +'<div class="er-top"><input class="er-in er-reading" id="er-reading-'+id+'" type="number" inputmode="decimal" step="0.001" min="0" value="'+escapeEntryText(r.reading)+'" disabled aria-label="Reading in kWh" '+key+'><span class="er-unit">kWh</span></div>'
+      +'<div class="er-meta"><input class="er-in" id="er-date-'+id+'" type="date" value="'+escapeEntryText(date)+'" disabled aria-label="Date" '+key+'><input class="er-in" id="er-time-'+id+'" type="time" value="'+escapeEntryText(time)+'" disabled aria-label="Time" '+key+'></div>'
+      +'<input class="er-in er-notes" id="er-notes-'+id+'" type="text" placeholder="Add a note" value="'+escapeEntryText(r.notes||'')+'"'+(r.notes?'':' data-empty="1"')+' disabled aria-label="Note" '+key+'>'
+      +'</div><div class="er-actions" id="er-actions-'+id+'">'+entryViewButtons(id)+'</div></div>';
+  }).join('');
 }
 function beginEntryEdit(id) {
-  const form=document.getElementById('entry-edit-'+id); if(form){document.getElementById('entry-view-'+id).hidden=true;form.hidden=false;document.getElementById('entry-reading-'+id)?.focus();}
+  if(editingEntryId!==null&&String(editingEntryId)!==String(id))renderEntries();
+  const row=document.getElementById('er-'+id); if(!row)return;
+  editingEntryId=String(id);
+  row.classList.add('editing');
+  row.querySelectorAll('.er-in').forEach(i=>i.disabled=false);
+  document.getElementById('er-actions-'+id).innerHTML='<button class="er-btn ok" aria-label="Save" title="Save" onclick="saveEntryEdit('+id+')">'+ICONS.ok+'</button><button class="er-btn" aria-label="Cancel" title="Cancel" onclick="renderEntries()">'+ICONS.x+'</button>';
+  const f=document.getElementById('er-reading-'+id); if(f){f.focus();f.select&&f.select();}
 }
 function saveEntryEdit(id) {
   const index=readings.findIndex(r=>String(r.id)===String(id)); if(index<0)return;
-  const date=document.getElementById('entry-date-'+id).value;
-  const time=document.getElementById('entry-time-'+id).value||'12:00';
-  const value=parseFloat(document.getElementById('entry-reading-'+id).value);
+  const g=k=>document.getElementById('er-'+k+'-'+id);
+  const date=g('date').value,time=g('time').value||'12:00',value=parseFloat(g('reading').value),notes=g('notes').value.trim();
   if(!date){toast('Pick a date','#ef4444');return;}
   if(!Number.isFinite(value)||value<0){toast('Enter a valid reading','#ef4444');return;}
-  readings[index].ts=date+'T'+time; readings[index].reading=value;
+  Object.assign(readings[index],{ts:date+'T'+time,reading:value,notes,u:Date.now()});
   persistData();
   renderEntries();renderHistory();renderSummary();renderChart();renderStats();updateCount();
   toast('Reading updated ✓');
@@ -1026,7 +1095,7 @@ function saveEntryEdit(id) {
 function deleteReading(id) {
   if (!confirm('Delete this reading?')) return;
   deletedReadingIds=[...new Set([...deletedReadingIds,String(id)])];
-  readings = readings.filter(r => r.id !== id);
+  readings = readings.filter(r => String(r.id) !== String(id));
   persistData();
   renderHistory(); renderEntries(); renderSummary(); renderChart(); renderStats(); updateCount();
 }
@@ -1039,7 +1108,7 @@ function importECASData() {
   const existing = new Set(readings.map(r => r.ts));
   let added = 0;
   ECAS_IMPORT.readings.forEach(r => {
-    if (!existing.has(r.ts)) { readings.push(r); added++; }
+    if (!existing.has(r.ts)) { readings.push({...r,u:Date.now()}); added++; }
   });
   // Apply ECAS settings
   settings.rate     = ECAS_IMPORT.settings.rate;
@@ -1075,7 +1144,7 @@ async function handleCSVFile(input) {
     const imported=rows.map((row,i)=>{
       const date=(row[dateCol]||'').trim(), time=timeCol>=0?(row[timeCol]||'').trim():'12:00', value=Number((row[readingCol]||'').trim());
       if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(value)||value<0)throw new Error('Invalid date or reading on CSV row '+(i+2)+'.');
-      return {id:Date.now()+i,ts:date+'T'+(time||'12:00'),reading:value,notes:notesCol>=0?(row[notesCol]||'').trim():''};
+      return {id:Date.now()+i,ts:date+'T'+(time||'12:00'),reading:value,notes:notesCol>=0?(row[notesCol]||'').trim():'',u:Date.now()};
     });
     if(!imported.length)throw new Error('No readings were found in this CSV.');
     if(!confirm('Replace your current '+readings.length+' reading(s) with '+imported.length+' reconciled reading(s)? Export your current data first if you want a backup.'))return;
@@ -1131,7 +1200,11 @@ function hideBanner() {
   document.getElementById('install-banner').style.display='none';
   localStorage.setItem('pl_banner_dismissed','1');
 }
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if ('serviceWorker' in navigator) {
+  const hadController=!!navigator.serviceWorker.controller; let swReloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(hadController&&!swReloaded&&editingEntryId===null){swReloaded=true;location.reload();} });
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+}
 </script>
 </body>
 </html>
