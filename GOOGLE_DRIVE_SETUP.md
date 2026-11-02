@@ -1,6 +1,8 @@
 # Google Drive sync setup
 
-PowerLog stores shared readings, tariff periods, and currency in a visible `PowerLog.csv` file in the connected Google Drive account. Each browser keeps a local cache. The CSV is the shared data source.
+PowerLog keeps local data in each browser and syncs through Drive. It creates a small `PowerLog-sync-…csv` file for each device and merges the device files when syncing. Keep these files in Drive; do not rename or edit them manually.
+
+The updated app also supports two homes. Each home has separate readings, tariffs, currency, and history.
 
 ## Google Cloud setup
 
@@ -18,10 +20,24 @@ PowerLog stores shared readings, tariff periods, and currency in a visible `Powe
 1. Open PowerLog over HTTPS or from a localhost web server. A `file://` address is not supported by Google sign-in.
 2. Open **Settings → Google Drive Sync**, paste the OAuth client ID, and select **Connect Google Drive**.
 3. Sign in to the Google account that should own the data and approve the Drive access request.
-4. Start on the device that currently has the readings you want to keep. If no PowerLog file exists, the app creates it from that browser’s data. On another device, connect the same Google account; the app loads the Drive copy into that browser.
+4. Connect the same Google account in PowerLog on each device.
 
-If a Drive file already exists and the browser also has readings, PowerLog merges the readings by ID and uploads the combined data. Local-only readings are preserved; when the same reading ID exists in both places, Drive’s copy is used on connection. Drive tariffs and currency are loaded. Local edits are uploaded automatically after a short pause. **Sync now** downloads the latest Drive file, merges readings and deletion markers, and uploads the merged data. Reconnect after a page reload or when Google’s short-lived access token expires.
+Update PowerLog on every device before syncing so older versions do not mix the two homes’ readings.
 
-The app requests the `drive.file` scope, which lets it work with the PowerLog file it creates rather than requesting access to all Drive files. The OAuth client ID is public configuration and is saved in that browser; enter it on each device. Never add a client secret or service account key to this static app.
+When connecting, PowerLog reads existing PowerLog sync files, merges readings by ID and update time, and applies deletion markers. It then creates or updates that browser’s own sync file. Local edits are uploaded automatically after a short pause; **Sync now** downloads and merges the latest available files.
 
-The Drive CSV has columns for record type, reading date/time/value/notes, tariff rate and effective dates, and currency. Keep its header and record types intact if editing it manually. PowerLog writes the whole CSV when it syncs, so avoid editing it simultaneously from two devices: the last completed write can replace the other device’s changes. Export a backup regularly. The regular **Export Readings** button remains a separate, readings-only CSV export.
+An older `PowerLog.csv` is still read during migration and its data is assigned to **Home 1**. The updated app does not rewrite that legacy file. The new `PowerLog-sync-…csv` files are the ongoing sync files; keep them in Drive.
+
+The app requests the `drive.file` scope, which lets it work with files it creates rather than requesting access to all Drive files. The OAuth client ID is public configuration saved in that browser; enter it on each device. Never add a client secret or service-account key to this static app.
+
+## Full backup and restore
+
+Use **Settings → Data → Full backup** to download a JSON backup containing both homes, readings, tariffs, currencies, home names, and deletion history. Google credentials and appearance preferences are not included.
+
+To restore, choose the backup, review its date and contents, and confirm. Restoring replaces both homes’ local data. If Drive is connected, sync pauses until you choose how to proceed:
+
+- **Use restored backup on Drive** makes the backup the source for both homes. Items missing from the backup are marked deleted across the synced data.
+- **Merge existing Drive data** combines the backup with existing Drive data; records missing from the backup may return.
+- Leave the choice pending to keep the restored data local and Drive sync paused.
+
+The regular **Export Readings** button remains a separate, readings-only CSV export for the selected home.
