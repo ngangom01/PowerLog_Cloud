@@ -68,6 +68,9 @@
   .meter-bar { position:sticky; top:52px; z-index:40; display:flex; align-items:center; justify-content:center; gap:10px; padding:10px 14px; background:var(--bg-raised); border-bottom:1px solid var(--border); }
   .meter-bar label { color:var(--text-2); font-size:12px; font-weight:600; }
   .meter-select { max-width:min(70vw,360px); padding:8px 34px 8px 12px; border:1px solid var(--border); border-radius:9px; background:var(--bg-card); color:var(--text-1); font:600 14px 'Inter',system-ui,sans-serif; }
+  .backup-preview { margin-top:10px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--bg-raised); font-size:13px; line-height:1.5; }
+  .backup-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .backup-icon { width:17px; height:17px; vertical-align:-3px; margin-right:5px; }
 
   /* PAGES */
   .page { display: none; padding: 14px; width: 100%; max-width: 1440px; margin: 0 auto; }
@@ -355,7 +358,7 @@
 </nav>
 
 <div class="meter-bar">
-  <label for="meter-select">Current home</label>
+  <label for="meter-select"><svg class="backup-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z"/></svg>Current home</label>
   <select class="meter-select" id="meter-select" onchange="switchMeter(this.value)" aria-label="Choose which home’s meter to view"></select>
 </div>
 
@@ -487,15 +490,23 @@
   </div>
   <div class="card">
     <div class="card-title">Google Drive Sync</div>
-    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">Connect the same Google account on each device. Both homes, their readings, tariffs, and currencies are stored in a PowerLog.csv file in your Drive. Update PowerLog on every device before syncing so older versions do not mix the homes together.</p>
+    <p style="font-size:12px;color:var(--text-2);line-height:1.5;margin:-4px 0 12px">Connect the same Google account on each device. PowerLog keeps one small sync file per device and merges both homes, readings, tariffs, and currencies when devices sync. Keep these files in Drive. Update PowerLog on every device before syncing so older versions do not mix the homes together.</p>
     <label class="form-label" for="google-client-id">Google OAuth Client ID</label>
     <input class="form-input small" style="width:100%;margin-bottom:9px" type="text" id="google-client-id" placeholder="123456789.apps.googleusercontent.com" autocomplete="off">
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="entry-action" onclick="saveGoogleClientId()">Save Client ID</button>
-      <button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="connectGoogleDrive()">Connect Google Drive</button>
-      <button class="entry-action" id="drive-sync-now" onclick="syncDriveNow()" hidden>Sync now</button>
+      <button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="connectGoogleDrive()"><svg class="backup-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 8a5 5 0 0 0 1 10Z"/><path d="M12 12v7m0 0 3-3m-3 3-3-3"/></svg>Connect Google Drive</button>
+      <button class="entry-action" id="drive-sync-now" onclick="syncDriveNow()" hidden><svg class="backup-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M4 17a8 8 0 0 0 13.7-5.7L20 12M4 7v5h5"/><path d="M20 7A8 8 0 0 0 6.3 12.7L4 12"/></svg>Sync now</button>
     </div>
     <p id="drive-status" class="setting-sub" role="status" style="margin-top:10px">Not connected</p>
+    <div class="backup-preview" id="drive-restore-panel" hidden aria-live="polite">
+      <div><strong>Backup restore is waiting for a Drive choice.</strong> Sync is paused so older Drive data cannot silently return.</div>
+      <div class="backup-actions">
+        <button class="entry-action" onclick="syncRestoredBackupToDrive()"><svg class="backup-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M4 17a8 8 0 0 0 13.7-5.7L20 12M4 7v5h5"/><path d="M20 7A8 8 0 0 0 6.3 12.7L4 12"/></svg>Use restored backup on Drive</button>
+        <button class="entry-action" onclick="mergeDriveAfterRestore()">Merge existing Drive data</button>
+      </div>
+      <div class="setting-sub" style="margin-top:8px">You can leave this choice pending to keep the restored backup on this device with Drive sync paused.</div>
+    </div>
     <p class="setting-sub" style="line-height:1.5;margin-top:8px">Set up a Google OAuth Web client and enable the Google Drive API. Add this app’s HTTPS address or localhost as an authorized JavaScript origin. Only the OAuth Client ID belongs here; never add a client secret.</p>
   </div>
   <div class="card">
@@ -530,6 +541,22 @@
       <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px" onclick="exportCSV()">Export</button>
     </div>
     <div class="setting-row">
+      <div><div class="setting-label">Full backup</div><div class="setting-sub">Both homes, readings, tariffs, currency, and deletion history</div></div>
+      <button class="entry-action" onclick="downloadFullBackup()"><svg class="backup-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 17v3h14v-3"/></svg>Download</button>
+    </div>
+    <div class="setting-row">
+      <div><div class="setting-label">Restore full backup</div><div class="setting-sub">Choose a PowerLog JSON backup</div></div>
+      <input type="file" id="full-backup-file" accept=".json,application/json" hidden onchange="handleBackupFile(this)">
+      <button class="entry-action" onclick="document.getElementById('full-backup-file').click()"><svg class="backup-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4 4 4"/><path d="M5 17v3h14v-3"/></svg>Choose backup</button>
+    </div>
+    <div class="backup-preview" id="backup-preview" hidden aria-live="polite">
+      <div id="backup-preview-text"></div>
+      <div class="backup-actions">
+        <button class="btn btn-primary" style="width:auto;padding:8px 14px;font-size:13px" onclick="restoreSelectedBackup()">Restore both homes</button>
+        <button class="entry-action" onclick="cancelBackupRestore()">Cancel</button>
+      </div>
+    </div>
+    <div class="setting-row">
       <div><div class="setting-label">Readings in this home</div><div class="setting-sub" id="total-count">0 entries</div></div>
     </div>
   </div>
@@ -554,9 +581,10 @@ const legacyReadings=JSON.parse(localStorage.getItem('pl_readings')||'[]');
 const legacyDeleted=JSON.parse(localStorage.getItem('pl_deleted_readings')||'[]').map(String);
 const legacySettings=JSON.parse(localStorage.getItem('pl_settings')||'{}');
 const legacyTariffs=JSON.parse(localStorage.getItem('pl_tariffs')||'null');
-let meters=JSON.parse(localStorage.getItem('pl_meters')||'null');
-let meterData=JSON.parse(localStorage.getItem('pl_meter_data')||'null');
-let activeMeterId=localStorage.getItem('pl_active_meter')||'home1';
+const storedPowerLogState=JSON.parse(localStorage.getItem('pl_state_v1')||'null');
+let meters=storedPowerLogState?.meters||JSON.parse(localStorage.getItem('pl_meters')||'null');
+let meterData=storedPowerLogState?.meterData||JSON.parse(localStorage.getItem('pl_meter_data')||'null');
+let activeMeterId=storedPowerLogState?.activeMeterId||localStorage.getItem('pl_active_meter')||'home1';
 let googleClientId=localStorage.getItem('pl_google_client_id')||legacySettings.googleClientId||'';
 if(!Array.isArray(meters)||meters.length!==2||!METER_IDS.every(id=>meters.some(m=>m.id===id))){
   meters=[{id:'home1',name:'Home 1',u:0},{id:'home2',name:'Home 2',u:0}];
@@ -590,6 +618,13 @@ function saveActiveMeterState(){
 }
 loadActiveMeterState();
 let driveAccessToken=null, driveFileId=null, driveSaveTimer=null, driveSaveQueue=Promise.resolve(), driveLoading=false, driveDirty=false, driveEditVersion=0;
+const driveLockSupported=Boolean(navigator.locks&&navigator.locks.request);
+const driveIdStore=driveLockSupported?localStorage:sessionStorage;
+let driveDeviceId=driveIdStore.getItem('pl_drive_device_id');
+if(!driveDeviceId){driveDeviceId=(globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2));driveIdStore.setItem('pl_drive_device_id',driveDeviceId);}
+let driveRestorePending=localStorage.getItem('pl_drive_restore_pending')==='1';
+let pendingBackup=null;
+let driveSyncInProgress=false;
 
 let myChart  = null;
 let tariffKwhChart=null, tariffCostChart=null;
@@ -697,7 +732,7 @@ function saveSetting(key) {
 
 // ── GOOGLE DRIVE DATA SOURCE ──────────────────────────────────────────
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
-const DRIVE_FILE_NAME='PowerLog.csv';
+const DRIVE_FILE_NAME='PowerLog-sync';
 const DRIVE_QUERY="appProperties has { key='powerlog' and value='true' } and trashed = false";
 let driveQueue=Promise.resolve(), driveSyncTimer=null, driveLastAuto=0;
 function driveConnected(){return localStorage.getItem('pl_drive_connected')==='1';}
@@ -707,6 +742,7 @@ function clearDriveToken(){driveAccessToken=null;localStorage.removeItem('pl_dri
 function setDriveStatus(message,isError=false){
   const el=document.getElementById('drive-status'); if(el){el.textContent=message; el.style.color=isError?'var(--red)':'';}
   const sync=document.getElementById('drive-sync-now'); if(sync)sync.hidden=!driveConnected();
+  updateRestoreDrivePanel();
 }
 function saveGoogleClientId(){
   const id=document.getElementById('google-client-id').value.trim();
@@ -733,6 +769,7 @@ async function connectGoogleDrive(){
     setDriveStatus('Waiting for Google sign-in…');
     await requestDriveToken('');
     localStorage.setItem('pl_drive_connected','1');
+    updateRestoreDrivePanel();
     await runSync(true);
   }catch(e){setDriveStatus(e.message||'Could not connect to Google Drive',true);}
 }
@@ -823,6 +860,9 @@ function mergeRemote(remote){
 }
 function persistLocal(){
   saveActiveMeterState();
+  // One authoritative envelope makes a complete restore recoverable even if the
+  // browser closes while compatibility keys are being refreshed.
+  localStorage.setItem('pl_state_v1',JSON.stringify({version:1,meters,meterData,activeMeterId}));
   localStorage.setItem('pl_meter_data',JSON.stringify(meterData));
   localStorage.setItem('pl_meters',JSON.stringify(meters));
   localStorage.setItem('pl_active_meter',activeMeterId);
@@ -839,61 +879,190 @@ function refreshAll(){
 async function uploadDriveCSV(csv){
   await driveRequest('https://www.googleapis.com/upload/drive/v3/files/'+encodeURIComponent(driveFileId)+'?uploadType=media',{method:'PATCH',headers:{'Content-Type':'text/csv'},body:csv});
 }
-// Read -> merge -> write. Always pulls before pushing so one device never overwrites another's entries.
-async function syncCore(){
-  const listUrl='https://www.googleapis.com/drive/v3/files?spaces=drive&pageSize=20&orderBy=createdTime&fields=files(id,name,createdTime)&q='+encodeURIComponent(DRIVE_QUERY);
+async function createDeviceSyncFile(csv){
+  const shortId=driveDeviceId.replace(/[^a-zA-Z0-9]/g,'').slice(0,10)||'device';
+  const created=await driveRequest('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FILE_NAME+'-'+shortId+'.csv',mimeType:'text/csv',appProperties:{powerlog:'true',powerlogDevice:driveDeviceId}})});
+  driveFileId=(await created.json()).id;
+  await uploadDriveCSV(csv);
+}
+// Each browser/device writes only its own snapshot file. Concurrent devices therefore
+// create/update separate files; the next sync merges all snapshots and legacy files.
+async function syncCore(authoritativeRestore=false){
+  const listUrl='https://www.googleapis.com/drive/v3/files?spaces=drive&pageSize=100&orderBy=createdTime&fields=files(id,name,createdTime,appProperties)&q='+encodeURIComponent(DRIVE_QUERY);
   const files=(await (await driveRequest(listUrl)).json()).files||[];
+  const ownFile=files.find(file=>file.appProperties&&file.appProperties.powerlogDevice===driveDeviceId)||null;
   if(!files.length){
-    const created=await driveRequest('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FILE_NAME,mimeType:'text/csv',appProperties:{powerlog:'true'}})});
-    driveFileId=(await created.json()).id;
-    await uploadDriveCSV(serializeDriveCSV());
-    return;
+    await createDeviceSyncFile(serializeDriveCSV());
+    return 1;
   }
-  driveFileId=files[0].id;            // oldest file is the canonical one on every device
-  let remoteText='';
-  for(let i=0;i<files.length;i++){    // any stray duplicate files are merged in too
-    const text=await (await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(files[i].id)+'?alt=media')).text();
-    if(i===0)remoteText=text;
+  let ownText='',remoteSnapshots=[];
+  for(const file of files){
+    const text=await (await driveRequest('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(file.id)+'?alt=media')).text();
+    if(ownFile&&file.id===ownFile.id)ownText=text;
     if(!text.trim())continue;
-    try{mergeRemote(parseDriveCSV(text));}catch(e){if(i===0)throw e;}
+    try{
+      const parsed=parseDriveCSV(text);
+      if(authoritativeRestore)remoteSnapshots.push(parsed);else mergeRemote(parsed);
+    }catch(e){throw new Error('Could not safely merge Drive file '+(file.name||'PowerLog sync data')+': '+(e.message||'invalid data'));}
   }
+  if(authoritativeRestore)applyRestoredBackupOverDrive(remoteSnapshots);
   persistLocal();refreshAll();
   const merged=serializeDriveCSV();
-  if(merged!==remoteText)await uploadDriveCSV(merged);
+  if(ownFile){
+    driveFileId=ownFile.id;
+    if(merged!==ownText)await uploadDriveCSV(merged);
+  }else await createDeviceSyncFile(merged);
+  return files.filter(file=>file.appProperties&&file.appProperties.powerlogDevice).length+(ownFile?0:1);
 }
-function runSync(manual){
+function runSync(manual,authoritativeRestore=false){
   driveQueue=driveQueue.then(async()=>{
     if(!driveConnected())return;
+    if(driveRestorePending&&!authoritativeRestore){updateRestoreDrivePanel();setDriveStatus('Drive sync paused · choose how to handle the restored backup');return;}
     if(!driveAccessToken){setDriveStatus('Session expired · tap Sync now to reconnect',manual);return;}
+    driveSyncInProgress=true;updateRestoreDrivePanel();
     try{
       setDriveStatus('Syncing…');
-      await syncCore();
-      setDriveStatus('Connected · synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+      let devices=0;
+      if(driveLockSupported)devices=await navigator.locks.request('powerlog-drive-sync',{mode:'exclusive'},()=>syncCore(authoritativeRestore));
+      else devices=await syncCore(authoritativeRestore);
+      if(authoritativeRestore){driveRestorePending=false;localStorage.removeItem('pl_drive_restore_pending');updateRestoreDrivePanel();}
+      setDriveStatus('Synced with Drive · '+devices+' device file'+(devices===1?'':'s'));
       if(manual)toast('Google Drive synced ✓');
     }catch(e){setDriveStatus(e.message||'Drive sync failed',true);if(manual)toast('Sync failed','#ef4444');}
+    finally{driveSyncInProgress=false;updateRestoreDrivePanel();}
   });
   return driveQueue;
 }
 function syncDriveNow(){
   if(!driveConnected()){toast('Connect Google Drive first','#ef4444');return;}
+  if(driveRestorePending){updateRestoreDrivePanel();toast('Choose how to handle the restored backup first','#ef4444');return;}
   const ready=driveAccessToken?Promise.resolve():requestDriveToken('');   // runs inside the tap, so the sign-in popup is allowed
   return ready.then(()=>runSync(true)).catch(e=>setDriveStatus(e.message||'Sign-in failed',true));
 }
 function scheduleDriveSync(){
-  if(!driveConnected()||!driveAccessToken)return;
+  if(!driveConnected()||!driveAccessToken||driveRestorePending)return;
   clearTimeout(driveSyncTimer);driveSyncTimer=setTimeout(()=>runSync(false),800);
 }
 function persistData(){persistLocal();scheduleDriveSync();}
+function updateRestoreDrivePanel(){
+  const panel=document.getElementById('drive-restore-panel');if(!panel)return;
+  panel.hidden=!driveRestorePending;
+  panel.querySelectorAll('button').forEach(button=>button.disabled=!driveConnected()||driveSyncInProgress);
+}
+function downloadFullBackup(){
+  saveActiveMeterState();
+  const safeData={};
+  for(const id of METER_IDS){
+    const d=meterData[id],s={...(d.settings||{})};delete s.googleClientId;
+    safeData[id]={readings:d.readings.map(r=>({id:r.id,ts:r.ts,reading:r.reading,notes:r.notes||'',u:Number(r.u)||0})),deletedReadingIds:d.deletedReadingIds.map(String),settings:{rate:Number(s.rate)||0,standing:Number(s.standing)||0,currency:String(s.currency||'$'),currencyU:Number(s.currencyU)||0},tariffs:d.tariffs.map(t=>({id:t.id,rate:Number(t.rate),standing:Number(t.standing),start:t.start,end:t.end||'',title:t.title||'',u:Number(t.u)||0}))};
+  }
+  const backup={format:'powerlog-two-home-backup',schemaVersion:1,createdAt:new Date().toISOString(),activeMeterId,meters:meters.map(m=>({id:m.id,name:m.name})),data:safeData};
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='powerlog-full-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast('Full backup downloaded ✓');
+}
+function validateBackup(input){
+  if(!input||input.format!=='powerlog-two-home-backup'||input.schemaVersion!==1)throw new Error('This is not a supported PowerLog backup.');
+  if(!input.data||!Array.isArray(input.meters)||input.meters.length!==2||!METER_IDS.every(id=>input.meters.some(m=>m&&m.id===id)))throw new Error('Backup must contain both PowerLog homes.');
+  const names=METER_IDS.map(id=>String(input.meters.find(m=>m.id===id).name||'').trim());
+  if(names.some(n=>!n)||names[0].toLocaleLowerCase()===names[1].toLocaleLowerCase())throw new Error('Backup contains invalid or duplicate home names.');
+  if(!METER_IDS.includes(input.activeMeterId))throw new Error('Backup has an invalid selected home.');
+  const normalized={meters:METER_IDS.map((id,i)=>({id,name:names[i],u:0})),activeMeterId:input.activeMeterId,data:{}};
+  const syncNumber=(value,label)=>{const n=Number(value??0);if(!Number.isFinite(n)||n<0)throw new Error('Invalid '+label+' in backup.');return n;};
+  for(const id of METER_IDS){
+    const source=input.data[id];if(!source||!Array.isArray(source.readings)||!Array.isArray(source.tariffs)||!Array.isArray(source.deletedReadingIds)||!source.settings||typeof source.settings!=='object')throw new Error('Backup data is incomplete for '+names[METER_IDS.indexOf(id)]+'.');
+    const readingIds=new Set(),tariffIds=new Set();
+    const readings=source.readings.map((r,i)=>{
+      if(!r||r.id===undefined||r.id===null||String(r.id)===''||!Number.isSafeInteger(Number(r.id))||Number(r.id)<=0||!Number.isFinite(Number(r.reading))||Number(r.reading)<0||typeof r.ts!=='string'||!Number.isFinite(Date.parse(r.ts)))throw new Error('Invalid reading '+(i+1)+' in '+names[METER_IDS.indexOf(id)]+'.');
+      const key=String(r.id);if(readingIds.has(key))throw new Error('Duplicate reading ID in '+names[METER_IDS.indexOf(id)]+'.');readingIds.add(key);
+      return{id:Number(r.id),ts:r.ts,reading:Number(r.reading),notes:String(r.notes||''),u:syncNumber(r.u,'reading update time')};
+    });
+    const tariffs=source.tariffs.map((t,i)=>{
+      if(!t||t.id===undefined||t.id===null||String(t.id)===''||!Number.isSafeInteger(Number(t.id))||Number(t.id)<=0||!Number.isFinite(Number(t.rate))||Number(t.rate)<0||!Number.isFinite(Number(t.standing))||Number(t.standing)<0||typeof t.start!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(t.start)||!Number.isFinite(Date.parse(t.start))||(t.end&&(!/^\d{4}-\d{2}-\d{2}$/.test(t.end)||!Number.isFinite(Date.parse(t.end))||t.end<t.start)))throw new Error('Invalid tariff '+(i+1)+' in '+names[METER_IDS.indexOf(id)]+'.');
+      const key=String(t.id);if(tariffIds.has(key))throw new Error('Duplicate tariff ID in '+names[METER_IDS.indexOf(id)]+'.');tariffIds.add(key);
+      return{id:Number(t.id),rate:Number(t.rate),standing:Number(t.standing),start:t.start,end:t.end||'',title:String(t.title||''),u:syncNumber(t.u,'tariff update time')};
+    });
+    if(!tariffs.length)throw new Error(names[METER_IDS.indexOf(id)]+' needs at least one tariff.');
+    const deleted=source.deletedReadingIds.map(String);
+    if(deleted.some(marker=>readingIds.has(marker)||marker.startsWith('tariff:')&&tariffIds.has(marker.slice(7))))throw new Error('Backup contains an item marked both active and deleted.');
+    const currency=String(source.settings.currency||'$');if(currency.length>3)throw new Error('Backup contains an invalid currency symbol.');
+    const rate=syncNumber(source.settings.rate,'unit rate'),standing=syncNumber(source.settings.standing,'standing charge'),currencyU=syncNumber(source.settings.currencyU,'currency update time');
+    normalized.data[id]={readings,deletedReadingIds:[...new Set(deleted)],settings:{rate,standing,currency,currencyU},tariffs};
+  }
+  return normalized;
+}
+async function handleBackupFile(input){
+  const file=input.files&&input.files[0];if(!file)return;
+  try{
+    if(file.size>10*1024*1024)throw new Error('Backup file is larger than 10 MB.');
+    const parsed=JSON.parse(await file.text());pendingBackup=validateBackup(parsed);
+    const counts=METER_IDS.map((id,i)=>pendingBackup.meters[i].name+': '+pendingBackup.data[id].readings.length+' readings, '+pendingBackup.data[id].tariffs.length+' tariffs').join(' · ');
+    const created=parsed.createdAt&&Number.isFinite(Date.parse(parsed.createdAt))?new Date(parsed.createdAt).toLocaleString():'unknown date';
+    document.getElementById('backup-preview-text').textContent='Backup from '+created+'. '+counts+'. Restoring replaces both homes on this device.';
+    document.getElementById('backup-preview').hidden=false;
+  }catch(error){pendingBackup=null;document.getElementById('backup-preview').hidden=true;toast(error.message||'Could not read this backup.','#ef4444');}
+  finally{input.value='';}
+}
+function cancelBackupRestore(){pendingBackup=null;document.getElementById('backup-preview').hidden=true;}
+function restoreSelectedBackup(){
+  if(!pendingBackup)return;
+  if(driveSyncInProgress){toast('Wait for Drive sync to finish before restoring','#ef4444');return;}
+  if(!confirm('Replace readings, tariffs, currencies, home names, and deletion history for both homes with this backup?'))return;
+  const keys=['pl_state_v1','pl_meter_data','pl_meters','pl_active_meter','pl_readings','pl_deleted_readings','pl_tariffs','pl_settings','pl_google_client_id','pl_drive_restore_pending'];
+  const before=new Map(keys.map(key=>[key,localStorage.getItem(key)])),old={meters,meterData,activeMeterId,readings,deletedReadingIds,settings,tariffs,driveRestorePending};
+  try{
+    const now=Date.now();meters=pendingBackup.meters.map(m=>({...m,u:now}));meterData=JSON.parse(JSON.stringify(pendingBackup.data));activeMeterId=pendingBackup.activeMeterId;
+    for(const id of METER_IDS){meterData[id].readings=meterData[id].readings.map(r=>({...r,u:now}));meterData[id].tariffs=meterData[id].tariffs.map(t=>({...t,u:now}));meterData[id].settings.currencyU=now;}
+    loadActiveMeterState();persistLocal();driveRestorePending=true;localStorage.setItem('pl_drive_restore_pending','1');
+    document.getElementById('backup-preview').hidden=true;pendingBackup=null;refreshAll();updateRestoreDrivePanel();
+    setDriveStatus('Backup restored locally · choose how Drive should be handled before syncing');toast('Both homes restored ✓');
+  }catch(error){
+    meters=old.meters;meterData=old.meterData;activeMeterId=old.activeMeterId;readings=old.readings;deletedReadingIds=old.deletedReadingIds;settings=old.settings;tariffs=old.tariffs;driveRestorePending=old.driveRestorePending;
+    for(const [key,value] of before){try{if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,value);}catch{}}
+    refreshAll();toast('Restore failed; previous data was kept. '+(error.message||''),'#ef4444');
+  }
+}
+function mergeDriveAfterRestore(){
+  if(!driveConnected()){toast('Connect Google Drive first','#ef4444');return;}
+  if(!confirm('Merge existing Drive data with this backup? Readings and settings from Drive that are not in the backup may return.'))return;
+  driveRestorePending=false;localStorage.removeItem('pl_drive_restore_pending');updateRestoreDrivePanel();
+  const ready=driveAccessToken?Promise.resolve():requestDriveToken('');ready.then(()=>runSync(true)).catch(e=>setDriveStatus(e.message||'Sign-in failed',true));
+}
+function syncRestoredBackupToDrive(){
+  if(!driveConnected()){toast('Connect Google Drive first','#ef4444');return;}
+  if(!confirm('Use this backup as the source for Drive? Data omitted from the backup will be marked deleted across both homes.'))return;
+  const ready=driveAccessToken?Promise.resolve():requestDriveToken('');ready.then(()=>runSync(true,true)).catch(e=>setDriveStatus(e.message||'Sign-in failed',true));
+}
+function applyRestoredBackupOverDrive(remoteSnapshots){
+  saveActiveMeterState();
+  const restored=JSON.parse(JSON.stringify(meterData)),now=Date.now();
+  meters=meters.map(m=>({...m,u:now}));
+  for(const id of METER_IDS){
+    const target=restored[id],tomb=new Set(target.deletedReadingIds.map(String));
+    target.readings=target.readings.map((r,i)=>({...r,id:now*1000+i,u:now}));
+    target.tariffs=target.tariffs.map((t,i)=>({...t,id:now*1000+500000+i,u:now}));
+    const keepReadings=new Set(target.readings.map(r=>String(r.id))),keepTariffs=new Set(target.tariffs.map(t=>String(t.id)));
+    target.settings={...target.settings,currencyU:now};
+    for(const remote of remoteSnapshots){
+      const state=remote.data[id];if(!state)continue;
+      for(const marker of state.deletedReadingIds){const value=String(marker),isTariff=value.startsWith('tariff:'),identity=isTariff?value.slice(7):value;if(isTariff?!keepTariffs.has(identity):!keepReadings.has(identity))tomb.add(value);}
+      state.readings.forEach(r=>{if(!keepReadings.has(String(r.id)))tomb.add(String(r.id));});
+      state.tariffs.forEach(t=>{if(!keepTariffs.has(String(t.id)))tomb.add('tariff:'+t.id);});
+    }
+    target.deletedReadingIds=[...tomb];
+  }
+  meterData=restored;loadActiveMeterState();
+}
 function autoPull(){
-  if(!driveConnected()||document.visibilityState==='hidden'||editingEntryId!==null)return;
+  if(!driveConnected()||driveRestorePending||document.visibilityState==='hidden'||editingEntryId!==null)return;
   if(Date.now()-driveLastAuto<15000)return;
   driveLastAuto=Date.now();loadDriveToken();runSync(false);
 }
 function initDrive(){
   loadDriveToken();
   if(driveConnected()){
-    setDriveStatus(driveAccessToken?'Connected · syncing…':'Session expired · tap Sync now to reconnect');
-    if(driveAccessToken)runSync(false);
+    if(driveRestorePending){updateRestoreDrivePanel();setDriveStatus('Drive sync paused · choose how to handle the restored backup');}
+    else{setDriveStatus(driveAccessToken?'Connected · syncing…':'Session expired · tap Sync now to reconnect');if(driveAccessToken)runSync(false);}
   }else setDriveStatus('Not connected');
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoPull();});
   window.addEventListener('focus',autoPull);
@@ -1258,7 +1427,7 @@ function renderHistory() {
     const kwh = prev && !reset ? r.reading-prev.reading : null;
     html += `<div class="reading-item">
       <div style="flex:1;min-width:0"><div class="history-main"><div class="history-reading">${Number(r.reading).toLocaleString(undefined,{maximumFractionDigits:3})} kWh</div><div class="history-date">${fmt(r.ts)}</div></div>
-           ${r.notes?`<div class="reading-date">${r.notes}</div>`:''}
+            ${r.notes?`<div class="reading-date">${escapeEntryText(r.notes)}</div>`:''}
            ${reset?'<div class="reading-meter">New meter series</div>':(kwh!==null?`<div class="reading-meter">+${kwh.toFixed(1)} kWh since prev</div>`:'')}
       </div>
     </div>`;
