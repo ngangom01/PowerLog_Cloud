@@ -69,9 +69,18 @@
   .page { display: none; padding: 14px; width: 100%; max-width: 1440px; margin: 0 auto; }
   .page.active { display: block; }
   [data-art-theme="true"] body {
+    --bg-card:rgba(26,31,46,.94);
+    --bg-raised:rgba(36,42,58,.90);
     background-color:var(--bg-deep);
-    background-image:radial-gradient(ellipse at 12% 8%,rgba(59,130,246,.11),transparent 34%),radial-gradient(ellipse at 88% 32%,rgba(16,185,129,.07),transparent 30%),radial-gradient(ellipse at 58% 92%,rgba(245,158,11,.06),transparent 36%),repeating-linear-gradient(135deg,rgba(148,163,184,.018) 0 1px,transparent 1px 30px);
-    background-attachment:fixed;
+    background-image:linear-gradient(rgba(15,18,25,.78),rgba(15,18,25,.84)),url('assets/powerlog-bg-dark.jpg');
+    background-size:cover;background-position:center center;background-attachment:fixed;
+  }
+  [data-theme="light"][data-art-theme="true"] body {
+    --bg-card:rgba(255,255,255,.94);
+    --bg-raised:rgba(237,241,247,.92);
+    background-color:var(--bg-deep);
+    background-image:linear-gradient(rgba(243,246,251,.68),rgba(243,246,251,.78)),url('assets/powerlog-bg-light.jpg');
+    background-size:cover;background-position:center center;background-attachment:fixed;
   }
 
   /* CARDS */
@@ -540,7 +549,8 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 // ── INIT ───────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
   applyTheme(localStorage.getItem('pl_theme')||'dark');
-  applyArtTheme(localStorage.getItem('pl_art_theme')==='true');
+  const savedArtTheme=localStorage.getItem('pl_art_theme');
+  applyArtTheme(savedArtTheme===null||savedArtTheme==='true');
   const now = new Date();
   document.getElementById('input-date').value = now.toISOString().slice(0,10);
   document.getElementById('input-time').value = now.toTimeString().slice(0,5);
